@@ -4,8 +4,9 @@
 
 ### 📋 Summary
 - **New Files**: 3
-- **Modified Files**: 6
-- **Total Files**: 9
+- **Modified Files**: 6  
+- **MonkeyOCR Source**: 1 folder (contains entire MonkeyOCR codebase)
+- **Total Files**: 9 + MonkeyOCR source code
 
 ---
 
@@ -206,11 +207,12 @@ graph TD
             P4F2["📄 api/settings.py<br/>✏️ MODIFY<br/>+ MONKEY_OCR_CONFIG"]
         end
         
-        subgraph "Dependencies"
-            DEP1["📦 MonkeyOCR Repository<br/>github.com/Yuliang-Liu/MonkeyOCR"]
+        subgraph "Dependencies & Source"
+            DEP1["📁 monkeyocr/<br/>Local MonkeyOCR source code"]
             DEP2["📦 PyTorch >= 2.0.0"]
             DEP3["📦 Transformers >= 4.30.0"]
             DEP4["📦 Pillow >= 9.0.0"]
+            DEP5["📦 OpenCV >= 4.5.0"]
         end
     end
     
@@ -226,6 +228,7 @@ graph TD
     DEP2 --> P2F1
     DEP3 --> P2F1
     DEP4 --> P2F1
+    DEP5 --> P2F1
     
     %% Implementation order
     P1F1 -.->|"Step 1"| P1F2
@@ -243,7 +246,53 @@ graph TD
     
     class P2F1,P4F1 newFile
     class P1F1,P1F2,P2F2,P3F1,P4F2 modFile
-    class DEP1,DEP2,DEP3,DEP4 depFile
+    class DEP1,DEP2,DEP3,DEP4,DEP5 depFile
+```
+
+---
+
+## 📁 MonkeyOCR Source Code Integration
+
+### 🎯 **MonkeyOCR Folder Structure**
+We'll include the MonkeyOCR source code directly in the RAGFlow project:
+
+```
+ragflow/
+├── monkeyocr/                    # 🆕 MonkeyOCR source code folder
+│   ├── __init__.py              # Python package initialization
+│   ├── magic_pdf/               # Core MonkeyOCR modules
+│   │   ├── pipe/
+│   │   │   ├── UNIPipe.py
+│   │   │   ├── OCRPipe.py
+│   │   │   └── ...
+│   │   └── ...
+│   ├── requirements.txt         # MonkeyOCR dependencies
+│   ├── setup.py                # MonkeyOCR setup script
+│   └── README.md               # MonkeyOCR documentation
+├── deepdoc/
+│   └── vision/
+│       └── monkey_ocr.py       # RAGFlow integration wrapper
+└── ...
+```
+
+### 🔄 **Integration Approach**
+1. **Local Source**: MonkeyOCR source code included in `monkeyocr/` folder
+2. **Wrapper Class**: `deepdoc/vision/monkey_ocr.py` wraps the local MonkeyOCR
+3. **Direct Imports**: Import from local `monkeyocr` package instead of external dependency
+4. **Version Control**: MonkeyOCR source tracked as part of RAGFlow project
+
+### 📦 **Installation Steps**
+```bash
+# Clone MonkeyOCR into ragflow/monkeyocr/
+cd ragflow/
+git clone https://github.com/Yuliang-Liu/MonkeyOCR.git monkeyocr/
+
+# Install MonkeyOCR dependencies
+cd monkeyocr/
+pip install -r requirements.txt
+
+# Install MonkeyOCR in development mode
+pip install -e .
 ```
 
 ---
@@ -352,10 +401,9 @@ class MonkeyOCR:
         """
         try:
             logger.info("Loading MonkeyOCR model for task...")
-            # Import and initialize MonkeyOCR
-            # This will be implemented based on MonkeyOCR's actual API
-            from magic_pdf.pipe.UNIPipe import UNIPipe
-            from magic_pdf.pipe.OCRPipe import OCRPipe
+            # Import from local MonkeyOCR source code
+            from monkeyocr.magic_pdf.pipe.UNIPipe import UNIPipe
+            from monkeyocr.magic_pdf.pipe.OCRPipe import OCRPipe
             
             # Initialize MonkeyOCR pipeline
             self.model = UNIPipe(
@@ -691,7 +739,7 @@ def get_parser(doc_type, filename, default):
     "model_settings": {
       "available_variants": ["pro-3B", "pro-1.2B"],
       "default_variant": "pro-1.2B",
-      "model_path": "/path/to/monkey_ocr_models"
+      "model_path": "./monkeyocr/models"
     },
     "advanced": {
       "batch_processing": false,
@@ -727,24 +775,55 @@ MONKEY_OCR_CONFIG = get_base_config("monkey_ocr", {
 ### 📦 New Dependencies
 Add to `requirements.txt`:
 ```text
-# MonkeyOCR dependencies
+# MonkeyOCR dependencies (from local source)
 torch>=2.0.0
 transformers>=4.30.0
 pillow>=9.0.0
-# Note: monkey-ocr package to be added when available
+opencv-python>=4.5.0
+numpy>=1.21.0
+# Note: MonkeyOCR source code included in monkeyocr/ folder
+```
+
+### 🔧 **MonkeyOCR Setup**
+Since we're using MonkeyOCR from local source:
+```bash
+# Install MonkeyOCR from local source
+cd ragflow/monkeyocr/
+pip install -e .
+
+# Download required models (if needed)
+# Follow MonkeyOCR's model download instructions
 ```
 
 ### 🖥️ System Requirements
 - **GPU**: Recommended (CUDA-compatible)
 - **Memory**: 8GB+ RAM for model loading
-- **Storage**: 5GB+ for MonkeyOCR model files
+- **Storage**: 
+  - 5GB+ for MonkeyOCR model files
+  - 500MB+ for MonkeyOCR source code (`monkeyocr/` folder)
 - **Python**: 3.8+
+- **Git**: Required for cloning MonkeyOCR source
 
 ---
 
 ## Implementation Order
 
 ### ✅ Step-by-Step Implementation
+
+#### **Prerequisites**
+**Step 0**: Setup MonkeyOCR source code
+```bash
+# Clone MonkeyOCR source into ragflow/monkeyocr/
+cd ragflow/
+git clone https://github.com/Yuliang-Liu/MonkeyOCR.git monkeyocr/
+
+# Install MonkeyOCR dependencies and models
+cd monkeyocr/
+pip install -r requirements.txt
+pip install -e .
+```
+
+#### **Implementation Steps**
 1. **Step 1**: Modify `api/db/__init__.py` (Add parser type)
 2. **Step 2**: Modify `api/db/init_data.py` (Add to parser list)
 3. **Step 3**: Create `deepdoc/vision/monkey_ocr.py` (Core MonkeyOCR component)
@@ -756,6 +835,11 @@ pillow>=9.0.0
 9. **Step 9**: Modify `api/settings.py` (Load configuration)
 
 ### 🧪 Testing After Each Step
+- **After Step 0**: Verify MonkeyOCR source is properly installed
+  ```bash
+  cd ragflow/
+  python -c "from monkeyocr.magic_pdf.pipe.UNIPipe import UNIPipe; print('✅ MonkeyOCR imports working')"
+  ```
 - **After Steps 1-2**: Verify parser type is recognized
 - **After Steps 3-4**: Test MonkeyOCR component in deepdoc.vision
 - **After Steps 5-6**: Test parser factory inclusion
@@ -797,6 +881,7 @@ pillow>=9.0.0
 
 | File | Type | Estimated Size | Complexity |
 |------|------|---------------|------------|
+| `monkeyocr/` | Source Folder | ~500MB | N/A |
 | `api/db/__init__.py` | Modified | +1 line | Very Low |
 | `api/db/init_data.py` | Modified | +15 chars | Very Low |
 | `deepdoc/vision/monkey_ocr.py` | New | ~150 lines | High |
@@ -807,7 +892,7 @@ pillow>=9.0.0
 | `conf/monkey_ocr_config.json` | New | ~30 lines | Medium |
 | `api/settings.py` | Modified | +10 lines | Low |
 
-**Total Estimated Lines of Code**: ~280 lines
+**Total New Code**: ~280 lines + MonkeyOCR source code (~500MB)
 
 ---
 
