@@ -924,4 +924,248 @@ The updated implementation follows an efficient memory management pattern:
 - MonkeyOCR used infrequently (not continuous processing)
 - Large model size that would consume significant memory if persistent
 - Multiple services sharing the same server resources
-- Memory-constrained environments 
+- Memory-constrained environments
+
+---
+
+## 🗄️ **Database Integration Using Existing RAGFlow Schema**
+
+### **📊 Use Current RAGFlow Database**
+
+MonkeyOCR integrates into the **existing RAGFlow database** without any schema modifications:
+
+#### **1. Existing Documents Table (Zero Changes)**
+```python
+# ✅ Use current documents table as-is
+{
+    'id': doc_id,
+    'kb_id': kb_id, 
+    'parser_id': 'monkey_ocr',           # ✅ Set to monkey_ocr
+    'parser_config': json.dumps({        # ✅ Store MonkeyOCR config
+        'model_variant': 'pro-1.2B',
+        'confidence_threshold': 0.8,
+        'structure_detection': True
+    }),
+    'name': filename,
+    'type': 'application/pdf',
+    'chunk_num': len(chunks),
+    'status': 'DONE'
+}
+```
+
+#### **2. Existing Chunks Table (Use Current Fields)**
+```python
+# ✅ Store MonkeyOCR data in existing chunk fields
+chunk = {
+    'id': chunk_id,
+    'doc_id': doc_id,
+    'kb_id': kb_id,
+    'content_with_weight': markdown_text,     # ✅ Main content from MonkeyOCR
+    'content_ltks': tokenized_content,        # ✅ Tokenized content
+    'content_sm_ltks': summary_tokens,        # ✅ Summary tokens
+    'important_kwd': structure_keywords,      # ✅ ['header', 'table', 'financial']  
+    'important_tks': structure_tokens,        # ✅ Structure-aware tokens
+    'img_id': json.dumps({                    # ✅ Store MonkeyOCR metadata in img_id
+        'structure_type': 'header',
+        'bbox': [x, y, width, height],
+        'confidence': 0.95,
+        'parent_chunk': 'chunk_123',
+        'model_version': 'pro-1.2B'
+    }),
+    'page_num': page_number,                  # ✅ From MonkeyOCR
+    'position': position_in_doc,              # ✅ Document order
+    'create_time': datetime.utcnow()
+}
+```
+
+### **🔄 Enhanced MonkeyOCR Parser (Uses Existing DB)**
+
+#### **Updated `rag/app/monkey_ocr_parser.py` with Database Integration**
+```python
+import json
+from datetime import datetime
+from deepdoc.vision import MonkeyOCR
+from rag.nlp import tokenize, rag_tokenizer
+
+def chunk(filename, binary=None, from_page=0, to_page=100000,
+          lang="Chinese", callback=None, **kwargs):
+    """
+    MonkeyOCR parser that stores chunks in existing RAGFlow database.
+    Uses current schema without any modifications.
+    """
+    def safe_callback(progress, message):
+        if callback:
+            callback(progress, message)
+    
+    safe_callback(0.1, "Initializing MonkeyOCR...")
+    
+    # Initialize MonkeyOCR
+    monkey_ocr = MonkeyOCR()
+    
+    # Prepare document
+    if binary:
+        with tempfile.NamedTemporaryFile(
+            delete=False, 
+            suffix=os.path.splitext(filename)[1]
+        ) as tmp_file:
+            tmp_file.write(binary)
+            temp_path = tmp_file.name
+    else:
+        temp_path = filename
+    
+    try:
+        safe_callback(0.2, "Processing with MonkeyOCR...")
+        
+        # Get structured result from MonkeyOCR
+        result = monkey_ocr.get_markdown_result(temp_path, kwargs.get("parser_config", {}))
+        
+        safe_callback(0.5, "Converting to RAGFlow chunks...")
+        
+        # Convert to RAGFlow chunk format using existing schema
+        chunks = convert_to_ragflow_chunks(result, filename, lang)
+        
+        safe_callback(1.0, f"Successfully created {len(chunks)} chunks")
+        
+        return chunks
+        
+    except Exception as e:
+        safe_callback(-1, f"MonkeyOCR processing failed: {str(e)}")
+        logger.error(f"Error processing {filename}: {e}")
+        return []
+        
+    finally:
+        # Cleanup
+        if binary and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+def convert_to_ragflow_chunks(result, filename, lang):
+    """
+    Convert MonkeyOCR result to RAGFlow chunks using existing database schema.
+    """
+    chunks = []
+    markdown_content = result.get('markdown', '')
+    structure_info = result.get('structure', [])
+    metadata = result.get('metadata', {})
+    
+    if structure_info:
+        # Create structure-aware chunks
+        for position, element in enumerate(structure_info):
+            element_text = element.get('text', '').strip()
+            if not element_text:
+                continue
+                
+            # Create base chunk using existing RAGFlow format
+            doc = {
+                "docnm_kwd": filename,
+                "title_tks": rag_tokenizer.tokenize(
+                    re.sub(r"\.[a-zA-Z]+$", "", filename)
+                ),
+                "doc_type_kwd": "monkey_ocr"
+            }
+            
+            # Tokenize content using existing RAGFlow tokenizer
+            eng = lang.lower() == "english"
+            tokenize(doc, element_text, eng)
+            
+            # ✅ Store MonkeyOCR metadata in existing img_id field as JSON
+            monkeyocr_metadata = {
+                'structure_type': element.get('type', 'text'),
+                'bbox': element.get('bbox', []),
+                'confidence': element.get('confidence', 1.0),
+                'page': element.get('page', 0),
+                'level': element.get('level', 0),
+                'parent_id': element.get('parent_id'),
+                'model_version': metadata.get('model_version', 'unknown')
+            }
+            
+            # ✅ Use existing important_kwd for structure keywords
+            structure_keywords = [
+                element.get('type', 'text'),
+                f"page_{element.get('page', 0)}",
+                f"level_{element.get('level', 0)}"
+            ]
+            
+            # Final chunk in existing RAGFlow format
+            chunk = {
+                "docnm_kwd": doc["docnm_kwd"],
+                "title_tks": doc["title_tks"], 
+                "doc_type_kwd": doc["doc_type_kwd"],
+                "content_with_weight": doc["content_with_weight"],
+                "content_ltks": doc["content_ltks"],
+                "content_sm_ltks": doc.get("content_sm_ltks", ""),
+                "important_kwd": doc.get("important_kwd", []) + structure_keywords,
+                "important_tks": doc.get("important_tks", []),
+                "img_id": json.dumps(monkeyocr_metadata),  # ✅ MonkeyOCR data here
+                "page_num": element.get('page', 0),
+                "position": position
+            }
+            
+            chunks.append(chunk)
+    else:
+        # Fallback: simple paragraph chunking
+        paragraphs = [p.strip() for p in markdown_content.split('\n\n') if p.strip()]
+        
+        for position, paragraph in enumerate(paragraphs):
+            doc = {
+                "docnm_kwd": filename,
+                "title_tks": rag_tokenizer.tokenize(
+                    re.sub(r"\.[a-zA-Z]+$", "", filename)
+                ),
+                "doc_type_kwd": "monkey_ocr"
+            }
+            
+            eng = lang.lower() == "english"
+            tokenize(doc, paragraph, eng)
+            
+            # Simple metadata for fallback chunks
+            simple_metadata = {
+                'structure_type': 'paragraph',
+                'confidence': 1.0,
+                'page': 0,
+                'model_version': metadata.get('model_version', 'unknown')
+            }
+            
+            chunk = {
+                "docnm_kwd": doc["docnm_kwd"],
+                "title_tks": doc["title_tks"],
+                "doc_type_kwd": doc["doc_type_kwd"], 
+                "content_with_weight": doc["content_with_weight"],
+                "content_ltks": doc["content_ltks"],
+                "content_sm_ltks": doc.get("content_sm_ltks", ""),
+                "important_kwd": doc.get("important_kwd", []) + ['paragraph'],
+                "important_tks": doc.get("important_tks", []),
+                "img_id": json.dumps(simple_metadata),
+                "page_num": 0,
+                "position": position
+            }
+            
+            chunks.append(chunk)
+    
+    return chunks
+```
+
+
+
+### **📈 Benefits of Using Existing Schema**
+
+✅ **Zero Migration**: No database changes required  
+✅ **Backward Compatible**: Works with existing RAGFlow infrastructure  
+✅ **Immediate Integration**: Can deploy without schema updates  
+✅ **Flexible Storage**: JSON in `img_id` allows complex MonkeyOCR metadata  
+✅ **Existing Indexes**: Leverages current Elasticsearch setup  
+✅ **Simple Queries**: Use existing `important_kwd` for structure filtering  
+
+### **🎯 MonkeyOCR Data Storage Strategy**
+
+| RAGFlow Field | MonkeyOCR Use | Example |
+|---------------|---------------|---------|
+| `content_with_weight` | ✅ Main content | "Financial Report Q3 2024" |
+| `important_kwd` | ✅ Structure keywords | ["header", "table", "financial"] |
+| `img_id` | ✅ Structure metadata | {"type": "header", "bbox": [100,200,300,50]} |
+| `page_num` | ✅ Page number | 1, 2, 3... |
+| `position` | ✅ Element order | 0, 1, 2... |
+
+This approach integrates MonkeyOCR **seamlessly** into existing RAGFlow without any database schema changes! 🎯 

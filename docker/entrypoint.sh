@@ -2,6 +2,16 @@
 
 set -e
 
+# Initialize MonkeyOCR if enabled
+if [ "${MONKEYOCR_ENABLED:-false}" = "true" ]; then
+    echo "🚀 Initializing MonkeyOCR..."
+    if [ -f "/app/docker/init_monkeyocr.sh" ]; then
+        bash /app/docker/init_monkeyocr.sh
+    else
+        echo "⚠️  MonkeyOCR initialization script not found"
+    fi
+fi
+
 # -----------------------------------------------------------------------------
 # Usage and command-line argument parsing
 # -----------------------------------------------------------------------------

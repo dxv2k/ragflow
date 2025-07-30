@@ -1,0 +1,98 @@
+# Multi-stage build for RAGFlow with MonkeyOCR
+FROM python:3.10-slim as base
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    wget \
+    unzip \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgthread-2.0-0 \
+    libfontconfig1 \
+    libfreetype6 \
+    libpng16-16 \
+    libjpeg62-turbo \
+    libtiff5 \
+    libwebp6 \
+    libopenexr23 \
+    libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
+    libgtk-3-0 \
+    libavcodec58 \
+    libavformat58 \
+    libswscale5 \
+    libv4l-0 \
+    libxvidcore4 \
+    libx264-163 \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libwebp-dev \
+    libopenexr-dev \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgtk-3-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libv4l-dev \
+    libxvidcore-dev \
+    libx264-dev \
+    libtesseract-dev \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy requirements files
+COPY requirements.txt .
+COPY requirements_monkeyocr.txt .
+COPY monkeyocr/requirements.txt ./monkeyocr_requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements_monkeyocr.txt
+
+# Copy MonkeyOCR source code
+COPY monkeyocr/ ./monkeyocr/
+
+# Download MonkeyOCR models (if not present)
+RUN mkdir -p /app/monkeyocr/model_weight && \
+    cd /app/monkeyocr/tools && \
+    python download_model.py --type huggingface --name MonkeyOCR || echo "Model download failed, will download at runtime"
+
+# Copy RAGFlow application
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data /app/cache /app/monkeyocr/cache
+
+# Set permissions
+RUN chmod +x /app/docker/entrypoint.sh && \
+    chmod +x /app/docker/run.sh
+
+# Expose ports
+EXPOSE 9380
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:9380/api/v1/monkeyocr/health || exit 1
+
+# Default command
+CMD ["/app/docker/entrypoint.sh"] 
