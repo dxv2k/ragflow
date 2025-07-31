@@ -1,250 +1,180 @@
 #!/usr/bin/env python3
 """
-MonkeyOCR Parser for RAGFlow
-Integrates MonkeyOCR functionality with RAGFlow's parser system
+MonkeyOCR Parser for RAGFlow Integration
+Integrates CEDD OCR service with RAGFlow document processing
 """
 
+import logging
 import os
 import sys
-import logging
-import tempfile
 from pathlib import Path
-from typing import Optional, Dict, List, Union, Any
+from typing import Dict, Any, Optional, List
 import json
 
-# Add monkeyocr to path
-monkeyocr_path = Path(__file__).parent.parent.parent / "monkeyocr"
-if str(monkeyocr_path) not in sys.path:
-    sys.path.insert(0, str(monkeyocr_path))
+# Add monkeyocr to path for CEDD OCR service
+monkeyocr_path = Path(__file__).parent.parent / "monkeyocr"
 
-try:
-    from deepdoc.vision.monkey_ocr import MonkeyOCRProcessor
-except ImportError as e:
-    logging.error(f"Failed to import MonkeyOCR processor: {e}")
-    raise
+from monkeyocr.magic_pdf.model.custom_model import MonkeyOCR
+from monkeyocr.parse import parse_file, single_task_recognition
 
 logger = logging.getLogger(__name__)
 
 class MonkeyOCRParser:
-    """
-    MonkeyOCR parser for RAGFlow integration
-    Handles document parsing and content extraction for RAG applications
-    """
+    """MonkeyOCR parser for RAGFlow document processing"""
     
     def __init__(self, config_path: Optional[str] = None):
-        """
-        Initialize MonkeyOCR parser
+        """Initialize MonkeyOCR parser"""
+        if config_path is None:
+            config_path = os.path.join(monkeyocr_path, "model_configs.yaml")
         
-        Args:
-            config_path: Path to MonkeyOCR config file
-        """
         self.config_path = config_path
-        self.processor = None
-        self._initialize_processor()
-        
-    def _initialize_processor(self):
-        """Initialize the MonkeyOCR processor"""
-        try:
-            self.processor = MonkeyOCRProcessor(config_path=self.config_path)
-            logger.info("MonkeyOCR parser initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize MonkeyOCR parser: {e}")
-            raise RuntimeError(f"MonkeyOCR parser initialization failed: {e}")
+        self.monkey_ocr_model = None
+        self._initialize_model()
     
-    def parse_document(self, 
-                      file_path: Union[str, Path],
-                      output_dir: Optional[str] = None,
-                      **kwargs) -> Dict[str, Any]:
-        """
-        Parse document and extract content for RAG
-        
-        Args:
-            file_path: Path to document file
-            output_dir: Output directory for results
-            **kwargs: Additional parsing options
-            
-        Returns:
-            Dictionary containing parsed content and metadata
-        """
-        file_path = Path(file_path)
-        if not file_path.exists():
-            raise FileNotFoundError(f"Document file does not exist: {file_path}")
-        
-        # Create output directory if not provided
-        if output_dir is None:
-            output_dir = tempfile.mkdtemp(prefix="ragflow_monkeyocr_")
-        
-        logger.info(f"Parsing document: {file_path}")
-        logger.info(f"Output directory: {output_dir}")
-        
+    def _initialize_model(self):
+        """Initialize the MonkeyOCR model"""
         try:
-            # Parse document using MonkeyOCR
-            parsed_dir = self.processor.parse_document(
+            self.monkey_ocr_model = MonkeyOCR(self.config_path)
+            logger.info("MonkeyOCR model initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize MonkeyOCR model: {e}")
+            raise
+    
+    def parse_document(self, file_path: str, output_dir: Optional[str] = None, 
+                      split_pages: bool = False, pred_abandon: bool = False,
+                      **kwargs) -> Dict[str, Any]:
+        """Parse document using MonkeyOCR"""
+        try:
+            if output_dir is None:
+                output_dir = os.path.join(os.path.dirname(file_path), "parsed_output")
+            
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Use CEDD OCR service to parse the document
+            result_dir = parse_file(
                 input_file=file_path,
                 output_dir=output_dir,
-                split_pages=kwargs.get('split_pages', False),
-                pred_abandon=kwargs.get('pred_abandon', False)
+                MonkeyOCR_model=self.monkey_ocr_model,
+                split_pages=split_pages,
+                pred_abandon=pred_abandon
             )
             
-            # Extract structured content
-            content_data = self.processor.get_parsed_content(parsed_dir)
+            # Read the parsed content
+            content = self._read_parsed_content(result_dir)
             
-            # Prepare RAGFlow compatible result
-            result = {
+            return {
                 'success': True,
-                'parsed_dir': parsed_dir,
-                'content': content_data['markdown_content'],
-                'content_list': content_data['content_list'],
-                'metadata': {
-                    'file_path': str(file_path),
-                    'file_name': file_path.name,
-                    'file_size': file_path.stat().st_size,
-                    'parser': 'monkeyocr',
-                    'parsed_at': str(Path(parsed_dir).stat().st_mtime)
-                }
+                'parsed_dir': result_dir,
+                'content': content,
+                'content_list': [content] if content else [],
+                'file_path': file_path
             }
             
-            logger.info(f"Document parsing completed successfully")
-            return result
-            
         except Exception as e:
-            logger.error(f"Document parsing failed: {e}")
+            logger.error(f"Failed to parse document {file_path}: {e}")
             return {
                 'success': False,
                 'error': str(e),
-                'file_path': str(file_path)
+                'file_path': file_path
             }
     
-    def extract_text_from_images(self, 
-                                image_paths: List[Union[str, Path]],
-                                task: str = "text") -> Dict[str, str]:
-        """
-        Extract text from images using OCR
-        
-        Args:
-            image_paths: List of image file paths
-            task: Task type ('text', 'formula', 'table')
-            
-        Returns:
-            Dictionary mapping filename to extracted text
-        """
+    def _read_parsed_content(self, result_dir: str) -> str:
+        """Read parsed content from result directory"""
         try:
-            return self.processor.extract_text_from_images(image_paths, task)
+            # Look for markdown files in the result directory
+            md_files = list(Path(result_dir).glob("*.md"))
+            if md_files:
+                with open(md_files[0], 'r', encoding='utf-8') as f:
+                    return f.read()
+            
+            # Look for text files
+            txt_files = list(Path(result_dir).glob("*.txt"))
+            if txt_files:
+                with open(txt_files[0], 'r', encoding='utf-8') as f:
+                    return f.read()
+            
+            return ""
+            
         except Exception as e:
-            logger.error(f"Text extraction from images failed: {e}")
+            logger.error(f"Failed to read parsed content: {e}")
+            return ""
+    
+    def extract_text_from_images(self, image_paths: List[str], task: str = "text") -> Dict[str, str]:
+        """Extract text from images using MonkeyOCR"""
+        try:
+            results = {}
+            for image_path in image_paths:
+                if not os.path.exists(image_path):
+                    logger.warning(f"Image file not found: {image_path}")
+                    continue
+                
+                # Use single task recognition for text extraction
+                result_dir = single_task_recognition(
+                    input_file=image_path,
+                    output_dir=os.path.dirname(image_path),
+                    MonkeyOCR_model=self.monkey_ocr_model,
+                    task=task
+                )
+                
+                content = self._read_parsed_content(result_dir)
+                results[image_path] = content
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to extract text from images: {e}")
             return {}
     
     def get_supported_formats(self) -> List[str]:
-        """
-        Get list of supported file formats
-        
-        Returns:
-            List of supported file extensions
-        """
-        return ['.pdf', '.jpg', '.jpeg', '.png']
+        """Get supported file formats"""
+        return [".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".bmp"]
     
-    def get_parser_info(self) -> Dict[str, Any]:
-        """
-        Get parser information
-        
-        Returns:
-            Dictionary containing parser metadata
-        """
-        return {
-            'name': 'monkeyocr',
-            'version': '1.0.0',
-            'description': 'MonkeyOCR parser for document analysis and OCR',
-            'supported_formats': self.get_supported_formats(),
-            'capabilities': [
-                'document_layout_analysis',
-                'text_extraction',
-                'formula_recognition',
-                'table_extraction',
-                'image_ocr'
-            ]
-        }
-    
-    def validate_file(self, file_path: Union[str, Path]) -> bool:
-        """
-        Validate if file can be processed by this parser
-        
-        Args:
-            file_path: Path to file to validate
+    def validate_file(self, file_path: str) -> bool:
+        """Validate if file can be processed by MonkeyOCR"""
+        try:
+            if not os.path.exists(file_path):
+                return False
             
-        Returns:
-            True if file can be processed, False otherwise
-        """
-        file_path = Path(file_path)
-        if not file_path.exists():
+            file_ext = Path(file_path).suffix.lower()
+            return file_ext in self.get_supported_formats()
+            
+        except Exception as e:
+            logger.error(f"Failed to validate file: {e}")
             return False
-        
-        # Check file extension
-        supported_extensions = self.get_supported_formats()
-        return file_path.suffix.lower() in supported_extensions
     
     def get_parsing_options(self) -> Dict[str, Any]:
-        """
-        Get available parsing options
-        
-        Returns:
-            Dictionary of parsing options and their descriptions
-        """
+        """Get available parsing options"""
         return {
-            'split_pages': {
-                'type': 'bool',
-                'default': False,
-                'description': 'Split results by pages'
-            },
-            'pred_abandon': {
-                'type': 'bool',
-                'default': False,
-                'description': 'Predict abandon elements'
-            }
+            'split_pages': False,
+            'pred_abandon': False,
+            'extract_images': True,
+            'generate_layout_pdf': True,
+            'generate_spans_pdf': True
         }
 
 
 class MonkeyOCRFactory:
-    """
-    Factory class for creating MonkeyOCR parser instances
-    """
-    
-    @staticmethod
-    def create_parser(config_path: Optional[str] = None) -> MonkeyOCRParser:
-        """
-        Create a new MonkeyOCR parser instance
-        
-        Args:
-            config_path: Path to MonkeyOCR config file
-            
-        Returns:
-            MonkeyOCR parser instance
-        """
-        return MonkeyOCRParser(config_path=config_path)
+    """Factory class for creating MonkeyOCR parser instances"""
     
     @staticmethod
     def get_parser_info() -> Dict[str, Any]:
-        """
-        Get information about the MonkeyOCR parser
-        
-        Returns:
-            Dictionary containing parser information
-        """
+        """Get MonkeyOCR parser information"""
         return {
-            'name': 'monkeyocr',
-            'version': '1.0.0',
-            'description': 'MonkeyOCR parser for document analysis and OCR',
-            'supported_formats': ['.pdf', '.jpg', '.jpeg', '.png'],
-            'capabilities': [
-                'document_layout_analysis',
-                'text_extraction',
-                'formula_recognition',
-                'table_extraction',
-                'image_ocr'
-            ],
-            'requirements': [
-                'monkeyocr',
-                'opencv-python',
-                'pdf2image',
-                'PIL'
-            ]
-        } 
+            "name": "CEDD OCR Service",
+            "version": "1.0.0",
+            "description": "Document parsing with CEDD OCR service",
+            "supported_formats": [".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".bmp"],
+            "capabilities": {
+                "document_layout_analysis": True,
+                "text_extraction": True,
+                "formula_recognition": True,
+                "table_extraction": True,
+                "image_ocr": True,
+                "omr_processing": True
+            }
+        }
+    
+    @staticmethod
+    def create_parser(config_path: Optional[str] = None) -> MonkeyOCRParser:
+        """Create MonkeyOCR parser instance"""
+        return MonkeyOCRParser(config_path=config_path) 

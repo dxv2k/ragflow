@@ -44,3 +44,12 @@ nltk_data/
 .lh/
 .venv
 docker/data
+
+# monkeyocr
+output/
+build/
+model_weight
+output_*
+output_cedd/
+=*
+*.egg-info

@@ -13,19 +13,13 @@ from typing import Optional, Dict, List, Union, Tuple
 import json
 
 # Add monkeyocr to path for imports
-monkeyocr_path = Path(__file__).parent.parent.parent / "monkeyocr"
-if str(monkeyocr_path) not in sys.path:
-    sys.path.insert(0, str(monkeyocr_path))
+monkeyocr_path = Path(__file__).parent.parent / "monkeyocr"
 
-try:
-    from magic_pdf.model.custom_model import MonkeyOCR
-    from magic_pdf.data.data_reader_writer import FileBasedDataWriter, FileBasedDataReader
-    from magic_pdf.data.dataset import PymuDocDataset, ImageDataset
-    from magic_pdf.model.doc_analyze_by_custom_model_llm import doc_analyze_llm
-    from pdf2image import convert_from_path
-except ImportError as e:
-    logging.error(f"Failed to import MonkeyOCR dependencies: {e}")
-    raise
+from monkeyocr.magic_pdf.model.custom_model import MonkeyOCR
+from monkeyocr.magic_pdf.data.data_reader_writer import FileBasedDataWriter, FileBasedDataReader
+from monkeyocr.magic_pdf.data.dataset import PymuDocDataset, ImageDataset
+from monkeyocr.magic_pdf.model.doc_analyze_by_custom_model_llm import doc_analyze_llm
+from pdf2image import convert_from_path
 
 logger = logging.getLogger(__name__)
 

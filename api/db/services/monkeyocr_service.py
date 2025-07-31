@@ -17,16 +17,7 @@ from api.db.services.common_service import CommonService
 from api.db.services.document_service import DocumentService
 from api.utils import current_timestamp, get_uuid
 
-# Add monkeyocr to path
-monkeyocr_path = Path(__file__).parent.parent.parent.parent / "monkeyocr"
-if str(monkeyocr_path) not in sys.path:
-    sys.path.insert(0, str(monkeyocr_path))
-
-try:
-    from rag.app.monkey_ocr_parser import MonkeyOCRParser, MonkeyOCRFactory
-except ImportError as e:
-    logging.error(f"Failed to import MonkeyOCR parser: {e}")
-    raise
+from rag.app.monkey_ocr_parser import MonkeyOCRParser, MonkeyOCRFactory
 
 logger = logging.getLogger(__name__)
 

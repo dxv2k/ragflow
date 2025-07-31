@@ -2,14 +2,10 @@
 
 set -e
 
-# Initialize MonkeyOCR if enabled
+# Initialize MonkeyOCR if enabled (disabled for now)
 if [ "${MONKEYOCR_ENABLED:-false}" = "true" ]; then
-    echo "🚀 Initializing MonkeyOCR..."
-    if [ -f "/app/docker/init_monkeyocr.sh" ]; then
-        bash /app/docker/init_monkeyocr.sh
-    else
-        echo "⚠️  MonkeyOCR initialization script not found"
-    fi
+    echo "🚀 MonkeyOCR initialization disabled for CEDD OCR service compatibility"
+    echo "⚠️  MonkeyOCR integration will be set up separately"
 fi
 
 # -----------------------------------------------------------------------------
@@ -168,9 +164,6 @@ function start_mcp_server() {
 # -----------------------------------------------------------------------------
 
 if [[ "${ENABLE_WEBSERVER}" -eq 1 ]]; then
-    echo "Starting nginx..."
-    /usr/sbin/nginx
-
     echo "Starting ragflow_server..."
     while true; do
         "$PY" api/ragflow_server.py

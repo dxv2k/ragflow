@@ -18,7 +18,6 @@ from api.db.services.monkeyocr_service import MonkeyOCRService
 from api.db.services.document_service import DocumentService
 from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.utils import get_uuid, current_timestamp
-from api.settings import settings
 
 logger = logging.getLogger(__name__)
 

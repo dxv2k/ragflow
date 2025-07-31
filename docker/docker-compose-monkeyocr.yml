@@ -1,0 +1,52 @@
+# -----------------------------------------------------------------------------
+# Docker Compose for RAGFlow with MonkeyOCR (GPU-enabled)
+# Based on MonkeyOCR Docker best practices
+# -----------------------------------------------------------------------------
+
+include:
+  - ./docker-compose-base.yml
+
+services:
+  ragflow:
+    build:
+      context: ../
+      dockerfile: Dockerfile.monkeyocr
+    container_name: ragflow-app
+    ports:
+      - "9380:9380"
+    environment:
+      - TZ=UTC
+      - MONKEYOCR_ENABLED=true
+      - MONKEYOCR_CONFIG_PATH=/ragflow/conf/monkey_ocr_config.json
+      - MONKEYOCR_MODEL_PATH=/ragflow/monkeyocr/model_weight
+      - MONKEYOCR_CACHE_DIR=/ragflow/monkeyocr/cache
+      - TMPDIR=/ragflow/tmp
+      - CUDA_VISIBLE_DEVICES=0
+      - HF_HUB_CACHE=/ragflow/monkeyocr/model_weight
+      - MODELSCOPE_CACHE=/ragflow/monkeyocr/model_weight
+      - PYTHONPATH=/ragflow/:/ragflow/monkeyocr
+    volumes:
+      - monkeyocr_models:/ragflow/monkeyocr/model_weight
+      - monkeyocr_cache:/ragflow/monkeyocr/cache
+    networks:
+      - ragflow
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9380/api/v1/monkeyocr/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  monkeyocr_models:
+    driver: local
+  monkeyocr_cache:
+    driver: local 
