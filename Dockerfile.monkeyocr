@@ -1,0 +1,97 @@
+# Dockerfile.monkeyocr
+# -----------------------------------------------------------------------------
+# Dockerfile for RAGFlow with MonkeyOCR support (GPU-enabled).
+# Builds RAGFlow locally and adds MonkeyOCR integration.
+# -----------------------------------------------------------------------------
+
+# Use CUDA environment and install basic dependencies (same as MonkeyOCR)
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.10 python3.10-dev python3-pip \
+    libgl1-mesa-glx libglib2.0-0 git curl \
+    wget poppler-utils \
+    libtesseract-dev tesseract-ocr tesseract-ocr-eng \
+    pkg-config libicu-dev libgdiplus default-jdk \
+    libatk-bridge2.0-0 libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev \
+    libjemalloc-dev nginx unzip vim less ghostscript \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Microsoft ODBC driver
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update && \
+    arch="$(uname -m)"; \
+    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
+        ACCEPT_EULA=Y apt-get install -y unixodbc-dev msodbcsql18; \
+    else \
+        ACCEPT_EULA=Y apt-get install -y unixodbc-dev msodbcsql17; \
+    fi || \
+    { echo "Failed to install ODBC driver"; exit 1; } && \
+    rm -rf /var/lib/apt/lists/*
+
+# Force create symbolic links (overwrite if exists)
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/bin/pip3 /usr/bin/pip
+
+# Configure pip to use faster mirror and upgrade
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install --upgrade pip setuptools
+
+# Set working directory
+WORKDIR /ragflow
+
+# Copy RAGFlow source code first
+COPY . /ragflow/
+
+# Install PyTorch with CUDA support (same version as MonkeyOCR)
+RUN pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 -i https://download.pytorch.org/whl/cu124
+
+# Install lmdeploy with disabled turbomind
+RUN DISABLE_TURBOMIND=1 pip install git+https://github.com/InternLM/lmdeploy.git
+
+# Install RAGFlow dependencies and setup
+RUN if [ -f "pyproject.toml" ]; then \
+        pip install -e .; \
+    elif [ -f "requirements.txt" ]; then \
+        pip install -r requirements.txt; \
+    else \
+        echo "No pyproject.toml or requirements.txt found, continuing..."; \
+    fi
+
+# Install MonkeyOCR in editable mode
+RUN cd /ragflow/monkeyocr && \
+    pip install -e . && \
+    pip install huggingface-hub modelscope && \
+    pip install qwen_vl_utils==0.0.10
+
+# Download NLTK data
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab'); nltk.download('averaged_perceptron_tagger'); nltk.download('wordnet'); nltk.download('stopwords')"
+
+# Create necessary directories
+RUN mkdir -p /ragflow/logs /ragflow/data /ragflow/cache /ragflow/monkeyocr/cache /ragflow/monkeyocr/model_weight
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/ragflow/:/ragflow/monkeyocr
+ENV TMPDIR=/ragflow/tmp
+ENV CUDA_VISIBLE_DEVICES=0
+ENV HF_HUB_CACHE=/ragflow/monkeyocr/model_weight
+ENV MODELSCOPE_CACHE=/ragflow/monkeyocr/model_weight
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh ./
+RUN chmod +x ./entrypoint.sh
+
+# Expose ports
+EXPOSE 9380
+
+# Set entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:9380/api/v1/monkeyocr/health || exit 1 
