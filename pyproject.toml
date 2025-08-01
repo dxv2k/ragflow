@@ -58,7 +58,7 @@ dependencies = [
     "ollama==0.2.1",
     "onnxruntime==1.19.2; sys_platform == 'darwin' or platform_machine != 'x86_64'",
     "onnxruntime-gpu==1.19.2; sys_platform != 'darwin' and platform_machine == 'x86_64'",
-    "openai==1.45.0",
+    "openai==1.88.0",
     "opencv-python==4.10.0.84",
     "opencv-python-headless==4.10.0.84",
     "openpyxl>=3.1.0,<4.0.0",
@@ -127,6 +127,27 @@ dependencies = [
     "mcp>=1.6.0",
     "opensearch-py==2.7.1",
     "pluginlib==0.9.4",
+    # MonkeyOCR dependencies (from monkeyocr/docker/requirements.txt)
+    "Brotli>=1.1.0",
+    "click>=8.1.7",
+    "fast-langdetect>=0.2.3",
+    "loguru>=0.6.0",
+    "pydantic>=2.7.2",
+    "PyMuPDF>=1.24.9,<=1.24.14",
+    "pdfminer.six==20231228",
+    "pycocotools>=2.0.6",
+    "qwen_vl_utils==0.0.10",
+    "matplotlib",
+    "doclayout_yolo==0.0.2b1",
+    "PyYAML",
+    "dill>=0.3.0",
+    "gradio==5.23.3",
+    "pdf2image==1.17.0",
+    "imutils>=0.5.4",
+    "fastapi>=0.104.1",
+    "uvicorn>=0.24.0",
+    "python-multipart>=0.0.6",
+    "lmdeploy==0.8.0",
 ]
 
 [project.optional-dependencies]
@@ -136,11 +157,30 @@ full = [
     "fastembed-gpu>=0.3.6,<0.4.0; sys_platform != 'darwin' and platform_machine == 'x86_64'",
     "flagembedding==1.2.10",
     "torch>=2.5.0,<3.0.0",
-    "transformers>=4.35.0,<5.0.0"
+    "transformers==4.50.0"
+]
+# MonkeyOCR backend dependencies
+monkeyocr-lmdeploy = [
+    "lmdeploy==0.8.0",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "torchaudio==2.5.1"
+]
+monkeyocr-vllm = [
+    "vllm==0.9.1",
+    "torch==2.5.1",
+    "torchvision==0.20.1", 
+    "torchaudio==2.5.1"
+]
+monkeyocr-transformers = [
+    "flash-attn==2.7.4.post1",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "torchaudio==2.5.1"
 ]
 
 [tool.setuptools]
-packages = ['agent', 'agentic_reasoning', 'api', 'deepdoc', 'graphrag', 'intergrations.chatgpt-on-wechat.plugins', 'mcp.server', 'rag', 'sdk.python.ragflow_sdk']
+packages = ['agent', 'agentic_reasoning', 'api', 'deepdoc', 'graphrag', 'intergrations.chatgpt-on-wechat.plugins', 'mcp.server', 'rag', 'sdk.python.ragflow_sdk', 'monkeyocr.magic_pdf']
 
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple"

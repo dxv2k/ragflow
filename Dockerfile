@@ -161,6 +161,39 @@ RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
         uv sync --python 3.10 --frozen --all-extras; \
     fi
 
+# Install MonkeyOCR following official Docker approach
+COPY monkeyocr monkeyocr
+
+# Install PyTorch with CUDA 12.4 support (as per MonkeyOCR documentation)
+RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
+    /ragflow/.venv/bin/pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+
+# Install MonkeyOCR in editable mode (as per official docs)
+RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
+    cd monkeyocr && /ragflow/.venv/bin/pip install -e .
+
+# Install model download related dependencies (from MonkeyOCR Docker)
+RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
+    /ragflow/.venv/bin/pip install modelscope huggingface_hub
+
+# Create model weight directories and copy scripts (following MonkeyOCR Docker pattern)
+RUN mkdir -p /ragflow/cache/monkeyocr/model_weight /ragflow/monkeyocr/cache /ragflow/monkeyocr/model_weight && \
+    if [ -f /ragflow/monkeyocr/docker/download_models.sh ]; then \
+        cp /ragflow/monkeyocr/docker/download_models.sh /ragflow/monkeyocr/ && \
+        chmod +x /ragflow/monkeyocr/download_models.sh; \
+    fi
+
+# Apply LMDeploy patch conditionally (following MonkeyOCR Docker pattern)
+RUN cd monkeyocr && \
+    if /ragflow/.venv/bin/python -c "import lmdeploy" 2>/dev/null; then \
+        /ragflow/.venv/bin/python tools/lmdeploy_patcher.py patch && echo "Successfully applied lmdeploy patch"; \
+    else \
+        echo "LMDeploy not available, skipping patch"; \
+    fi
+
+# Download NLTK data
+RUN /ragflow/.venv/bin/python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab'); nltk.download('averaged_perceptron_tagger'); nltk.download('wordnet'); nltk.download('stopwords')"
+
 COPY web web
 COPY docs docs
 RUN --mount=type=cache,id=ragflow_npm,target=/root/.npm,sharing=locked \
@@ -188,7 +221,9 @@ ENV VIRTUAL_ENV=/ragflow/.venv
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-ENV PYTHONPATH=/ragflow/
+ENV PYTHONPATH=/ragflow/:/ragflow/monkeyocr
+ENV HF_HUB_CACHE=/ragflow/cache/monkeyocr/model_weight
+ENV MODELSCOPE_CACHE=/ragflow/cache/monkeyocr/model_weight
 
 COPY web web
 COPY api api
@@ -201,6 +236,7 @@ COPY agentic_reasoning agentic_reasoning
 COPY pyproject.toml uv.lock ./
 COPY mcp mcp
 COPY plugin plugin
+COPY monkeyocr monkeyocr
 
 COPY docker/service_conf.yaml.template ./conf/service_conf.yaml.template
 COPY docker/entrypoint.sh ./
