@@ -9,11 +9,11 @@ from magic_pdf.model.custom_model import MonkeyOCR
 import torch.distributed as dist
 
 if __name__ == "__main__":
-    MonkeyOCR_model = MonkeyOCR('model_configs.yaml')
+    MonkeyOCR_model = MonkeyOCR("model_configs.yaml")
 
     total_time = 0
-    pdf_file_name = f"demo/demo1.pdf"  # replace with the real pdf path
-    name_without_suff = '.'.join(os.path.basename(pdf_file_name).split(".")[:-1])
+    pdf_file_name = "demo/demo1.pdf"  # replace with the real pdf path
+    name_without_suff = ".".join(os.path.basename(pdf_file_name).split(".")[:-1])
 
     # prepare env
     local_image_dir, local_md_dir = f"output/{name_without_suff}/images", f"output/{name_without_suff}"
@@ -21,9 +21,7 @@ if __name__ == "__main__":
 
     os.makedirs(local_image_dir, exist_ok=True)
 
-    image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(
-        local_md_dir
-    )
+    image_writer, md_writer = FileBasedDataWriter(local_image_dir), FileBasedDataWriter(local_md_dir)
 
     # read bytes
     reader1 = FileBasedDataReader()
@@ -71,7 +69,7 @@ if __name__ == "__main__":
     middle_json_content = pipe_result.get_middle_json()
 
     ### dump middle json
-    pipe_result.dump_middle_json(md_writer, f'{name_without_suff}_middle.json')
+    pipe_result.dump_middle_json(md_writer, f"{name_without_suff}_middle.json")
 
     print(f"Results saved to {local_md_dir}")
 

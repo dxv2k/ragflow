@@ -7,14 +7,14 @@
 		<filter x="-50%" y="-50%" width="200%" height="200%" id="f1"> <feGaussianBlur stdDeviation="2"/> </filter>
 	</defs>
 	<style>
-		.s0 { fill: none } 
-		.s1 { fill: #434343 } 
-		.s2 { fill: #d9d9d9 } 
-		.s3 { filter: url(#f1);fill: #d9d9d9 } 
-		.s4 { filter: url(#f1);fill: #fdb515 } 
-		.s5 { fill: #fdb515 } 
-		.s6 { filter: url(#f1);fill: #30a2ff } 
-		.s7 { fill: #30a2ff } 
+		.s0 { fill: none }
+		.s1 { fill: #434343 }
+		.s2 { fill: #d9d9d9 }
+		.s3 { filter: url(#f1);fill: #d9d9d9 }
+		.s4 { filter: url(#f1);fill: #fdb515 }
+		.s5 { fill: #fdb515 }
+		.s6 { filter: url(#f1);fill: #30a2ff }
+		.s7 { fill: #30a2ff }
 	</style>
 	<g id="Clip-Path" clip-path="url(#cp1)">
 		<g>

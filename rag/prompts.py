@@ -309,6 +309,7 @@ Output: What's the weather in Rochester on {tomorrow}?
     ans = re.sub(r"^.*</think>", "", ans, flags=re.DOTALL)
     return ans if ans.find("**ERROR**") < 0 else messages[-1]["content"]
 
+
 def cross_languages(tenant_id, llm_id, query, languages=[]):
     from api.db.services.llm_service import LLMBundle
 
@@ -322,7 +323,7 @@ Act as a streamlined multilingual translator. Strictly output translations separ
 
 1. Accept batch translation requests in format:
 [source text]
-=== 
+===
 [target languages separated by commas]
 
 2. Always maintain:
@@ -331,8 +332,8 @@ Act as a streamlined multilingual translator. Strictly output translations separ
 - Cultural context appropriateness
 
 3. Output format:
-[language1 translation] 
-### 
+[language1 translation]
+###
 [language1 translation]
 
 **Examples:**
@@ -348,11 +349,11 @@ Bonjour le monde ! Parlons de la sécurité de l'IA.
 ###
 こんにちは世界！AIの安全性について話し合いましょう。
 """
-    user_prompt=f"""
+    user_prompt = f"""
 Input:
 {query}
 ===
-{', '.join(languages)}
+{", ".join(languages)}
 
 Output:
 """

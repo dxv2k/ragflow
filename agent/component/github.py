@@ -43,13 +43,11 @@ class GitHub(ComponentBase, ABC):
             return GitHub.be_output("")
 
         try:
-            url = 'https://api.github.com/search/repositories?q=' + ans + '&sort=stars&order=desc&per_page=' + str(
-                self._param.top_n)
-            headers = {"Content-Type": "application/vnd.github+json", "X-GitHub-Api-Version": '2022-11-28'}
+            url = "https://api.github.com/search/repositories?q=" + ans + "&sort=stars&order=desc&per_page=" + str(self._param.top_n)
+            headers = {"Content-Type": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
             response = requests.get(url=url, headers=headers).json()
 
-            github_res = [{"content": '<a href="' + i["html_url"] + '">' + i["name"] + '</a>' + str(
-                i["description"]) + '\n stars:' + str(i['watchers'])} for i in response['items']]
+            github_res = [{"content": '<a href="' + i["html_url"] + '">' + i["name"] + "</a>" + str(i["description"]) + "\n stars:" + str(i["watchers"])} for i in response["items"]]
         except Exception as e:
             return GitHub.be_output("**ERROR**: " + str(e))
 

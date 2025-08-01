@@ -24,15 +24,15 @@ class StatusEnum(Enum):
 
 
 class UserTenantRole(StrEnum):
-    OWNER = 'owner'
-    ADMIN = 'admin'
-    NORMAL = 'normal'
-    INVITE = 'invite'
+    OWNER = "owner"
+    ADMIN = "admin"
+    NORMAL = "normal"
+    INVITE = "invite"
 
 
 class TenantPermission(StrEnum):
-    ME = 'me'
-    TEAM = 'team'
+    ME = "me"
+    TEAM = "team"
 
 
 class SerializedType(IntEnum):
@@ -41,30 +41,32 @@ class SerializedType(IntEnum):
 
 
 class FileType(StrEnum):
-    PDF = 'pdf'
-    DOC = 'doc'
-    VISUAL = 'visual'
-    AURAL = 'aural'
-    VIRTUAL = 'virtual'
-    FOLDER = 'folder'
+    PDF = "pdf"
+    DOC = "doc"
+    VISUAL = "visual"
+    AURAL = "aural"
+    VIRTUAL = "virtual"
+    FOLDER = "folder"
     OTHER = "other"
+
 
 VALID_FILE_TYPES = {FileType.PDF, FileType.DOC, FileType.VISUAL, FileType.AURAL, FileType.VIRTUAL, FileType.FOLDER, FileType.OTHER}
 
+
 class LLMType(StrEnum):
-    CHAT = 'chat'
-    EMBEDDING = 'embedding'
-    SPEECH2TEXT = 'speech2text'
-    IMAGE2TEXT = 'image2text'
-    RERANK = 'rerank'
-    TTS    = 'tts'
+    CHAT = "chat"
+    EMBEDDING = "embedding"
+    SPEECH2TEXT = "speech2text"
+    IMAGE2TEXT = "image2text"
+    RERANK = "rerank"
+    TTS = "tts"
 
 
 class ChatStyle(StrEnum):
-    CREATIVE = 'Creative'
-    PRECISE = 'Precise'
-    EVENLY = 'Evenly'
-    CUSTOM = 'Custom'
+    CREATIVE = "Creative"
+    PRECISE = "Precise"
+    EVENLY = "Evenly"
+    CUSTOM = "Custom"
 
 
 class TaskStatus(StrEnum):
@@ -74,7 +76,9 @@ class TaskStatus(StrEnum):
     DONE = "3"
     FAIL = "4"
 
-VALID_TASK_STATUS     = {TaskStatus.UNSTART, TaskStatus.RUNNING, TaskStatus.CANCEL, TaskStatus.DONE, TaskStatus.FAIL}
+
+VALID_TASK_STATUS = {TaskStatus.UNSTART, TaskStatus.RUNNING, TaskStatus.CANCEL, TaskStatus.DONE, TaskStatus.FAIL}
+
 
 class ParserType(StrEnum):
     PRESENTATION = "presentation"
@@ -105,4 +109,5 @@ class CanvasType(StrEnum):
     ChatBot = "chatbot"
     DocBot = "docbot"
 
-KNOWLEDGEBASE_FOLDER_NAME=".knowledgebase"
+
+KNOWLEDGEBASE_FOLDER_NAME = ".knowledgebase"

@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    
+
   chrome.storage.sync.get(["baseURL", "from", "auth", "sharedID"], (result) => {
     if (result.baseURL) {
       document.getElementById("base-url").value = result.baseURL;

@@ -22,7 +22,7 @@ _Each time a knowledge base is created, a folder with the same name is generated
 
 ## Configure knowledge base
 
-The following screenshot shows the configuration page of a knowledge base. A proper configuration of your knowledge base is crucial for future AI chats. For example, choosing the wrong embedding model or chunking method would cause unexpected semantic loss or mismatched answers in chats. 
+The following screenshot shows the configuration page of a knowledge base. A proper configuration of your knowledge base is crucial for future AI chats. For example, choosing the wrong embedding model or chunking method would cause unexpected semantic loss or mismatched answers in chats.
 
 ![knowledge base configuration](https://github.com/infiniflow/ragflow/assets/93570324/384c671a-8b9c-468c-b1c9-1401128a9b65)
 
@@ -74,9 +74,9 @@ Please note these two embedding models support both English and Chinese. If your
 ### Upload file
 
 - RAGFlow's **File Management** allows you to link a file to multiple knowledge bases, in which case each target knowledge base holds a reference to the file.
-- In **Knowledge Base**, you are also given the option of uploading a single file or a folder of files (bulk upload) from your local machine to a knowledge base, in which case the knowledge base holds file copies. 
+- In **Knowledge Base**, you are also given the option of uploading a single file or a folder of files (bulk upload) from your local machine to a knowledge base, in which case the knowledge base holds file copies.
 
-While uploading files directly to a knowledge base seems more convenient, we *highly* recommend uploading files to **File Management** and then linking them to the target knowledge bases. This way, you can avoid permanently deleting files uploaded to the knowledge base. 
+While uploading files directly to a knowledge base seems more convenient, we *highly* recommend uploading files to **File Management** and then linking them to the target knowledge bases. This way, you can avoid permanently deleting files uploaded to the knowledge base.
 
 ### Parse file
 
@@ -85,15 +85,15 @@ File parsing is a crucial topic in knowledge base configuration. The meaning of 
 ![parse file](https://github.com/infiniflow/ragflow/assets/93570324/5311f166-6426-447f-aa1f-bd488f1cfc7b)
 
 - Click the play button next to **UNSTART** to start file parsing.
-- Click the red-cross icon and then refresh, if your file parsing stalls for a long time. 
-- As shown above, RAGFlow allows you to use a different chunking method for a particular file, offering flexibility beyond the default method. 
-- As shown above, RAGFlow allows you to enable or disable individual files, offering finer control over knowledge base-based AI chats. 
+- Click the red-cross icon and then refresh, if your file parsing stalls for a long time.
+- As shown above, RAGFlow allows you to use a different chunking method for a particular file, offering flexibility beyond the default method.
+- As shown above, RAGFlow allows you to enable or disable individual files, offering finer control over knowledge base-based AI chats.
 
 ### Intervene with file parsing results
 
-RAGFlow features visibility and explainability, allowing you to view the chunking results and intervene where necessary. To do so: 
+RAGFlow features visibility and explainability, allowing you to view the chunking results and intervene where necessary. To do so:
 
-1. Click on the file that completes file parsing to view the chunking results: 
+1. Click on the file that completes file parsing to view the chunking results:
 
    _You are taken to the **Chunk** page:_
 
@@ -106,7 +106,7 @@ RAGFlow features visibility and explainability, allowing you to view the chunkin
    ![update chunk](https://github.com/infiniflow/ragflow/assets/93570324/1d84b408-4e9f-46fd-9413-8c1059bf9c76)
 
 :::caution NOTE
-You can add keywords to a file chunk to increase its ranking for queries containing those keywords. This action increases its keyword weight and can improve its position in search list.  
+You can add keywords to a file chunk to increase its ranking for queries containing those keywords. This action increases its keyword weight and can improve its position in search list.
 :::
 
 4. In Retrieval testing, ask a quick question in **Test text** to double-check if your configurations work:
@@ -136,7 +136,7 @@ As of RAGFlow v0.19.0, the search feature is still in a rudimentary form, suppor
 
 You are allowed to delete a knowledge base. Hover your mouse over the three dot of the intended knowledge base card and the **Delete** option appears. Once you delete a knowledge base, the associated folder under **root/.knowledge** directory is AUTOMATICALLY REMOVED. The consequence is:
 
-- The files uploaded directly to the knowledge base are gone;  
-- The file references, which you created from within **File Management**, are gone, but the associated files still exist in **File Management**. 
+- The files uploaded directly to the knowledge base are gone;
+- The file references, which you created from within **File Management**, are gone, but the associated files still exist in **File Management**.
 
 ![delete knowledge base](https://github.com/infiniflow/ragflow/assets/93570324/fec7a508-6cfe-4bca-af90-81d3fdb94098)

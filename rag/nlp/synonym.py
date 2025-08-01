@@ -25,20 +25,18 @@ from api.utils.file_utils import get_project_base_directory
 
 class Dealer:
     def __init__(self, redis=None):
-
         self.lookup_num = 100000000
         self.load_tm = time.time() - 1000000
         self.dictionary = None
         path = os.path.join(get_project_base_directory(), "rag/res", "synonym.json")
         try:
-            self.dictionary = json.load(open(path, 'r'))
+            self.dictionary = json.load(open(path, "r"))
         except Exception:
             logging.warning("Missing synonym.json")
             self.dictionary = {}
 
         if not redis:
-            logging.warning(
-                "Realtime synonym is disabled, since no redis connection.")
+            logging.warning("Realtime synonym is disabled, since no redis connection.")
         if not len(self.dictionary.keys()):
             logging.warning("Fail to load synonym")
 
@@ -79,6 +77,6 @@ class Dealer:
         return res[:topn]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     dl = Dealer()
     print(dl.dictionary)

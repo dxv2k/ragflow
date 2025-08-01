@@ -34,7 +34,8 @@ GRAPH_FIELD_SEP = "<SEP>"
 
 ErrorHandlerFn = Callable[[BaseException | None, str | None, dict | None], None]
 
-chat_limiter = trio.CapacityLimiter(int(os.environ.get('MAX_CONCURRENT_CHATS', 10)))
+chat_limiter = trio.CapacityLimiter(int(os.environ.get("MAX_CONCURRENT_CHATS", 10)))
+
 
 @dataclasses.dataclass
 class GraphChange:
@@ -43,9 +44,8 @@ class GraphChange:
     removed_edges: Set[Tuple[str, str]] = dataclasses.field(default_factory=set)
     added_updated_edges: Set[Tuple[str, str]] = dataclasses.field(default_factory=set)
 
-def perform_variable_replacements(
-    input: str, history: list[dict] | None = None, variables: dict | None = None
-) -> str:
+
+def perform_variable_replacements(input: str, history: list[dict] | None = None, variables: dict | None = None) -> str:
     """Perform variable replacements on the input string and in a chat log."""
     if history is None:
         history = []
@@ -78,9 +78,7 @@ def clean_str(input: Any) -> str:
     return re.sub(r"[\"\x00-\x1f\x7f-\x9f]", "", result)
 
 
-def dict_has_keys_with_types(
-    data: dict, expected_fields: list[tuple[str, type]]
-) -> bool:
+def dict_has_keys_with_types(data: dict, expected_fields: list[tuple[str, type]]) -> bool:
     """Return True if the given dictionary has the given keys with the given types."""
     for field, field_type in expected_fields:
         if field not in data:
@@ -114,7 +112,7 @@ def set_llm_cache(llmnm, txt, v, history, genconf):
     hasher.update(str(genconf).encode("utf-8"))
 
     k = hasher.hexdigest()
-    REDIS_CONN.set(k, v.encode("utf-8"), 24*3600)
+    REDIS_CONN.set(k, v.encode("utf-8"), 24 * 3600)
 
 
 def get_embed_cache(llmnm, txt):
@@ -136,7 +134,7 @@ def set_embed_cache(llmnm, txt, arr):
 
     k = hasher.hexdigest()
     arr = json.dumps(arr.tolist() if isinstance(arr, np.ndarray) else arr)
-    REDIS_CONN.set(k, arr.encode("utf-8"), 24*3600)
+    REDIS_CONN.set(k, arr.encode("utf-8"), 24 * 3600)
 
 
 def get_tags_from_cache(kb_ids):
@@ -157,10 +155,12 @@ def set_tags_to_cache(kb_ids, tags):
     k = hasher.hexdigest()
     REDIS_CONN.set(k, json.dumps(tags).encode("utf-8"), 600)
 
+
 def tidy_graph(graph: nx.Graph, callback):
     """
     Ensure all nodes and edges in the graph have some essential attribute.
     """
+
     def is_valid_node(node_attrs: dict) -> bool:
         valid_node = True
         for attr in ["description", "source_id"]:
@@ -168,6 +168,7 @@ def tidy_graph(graph: nx.Graph, callback):
                 valid_node = False
                 break
         return valid_node
+
     purged_nodes = []
     for node, node_attrs in graph.nodes(data=True):
         if not is_valid_node(node_attrs):
@@ -188,11 +189,13 @@ def tidy_graph(graph: nx.Graph, callback):
     if purged_edges and callback:
         callback(msg=f"Purged {len(purged_edges)} edges from graph due to missing essential attributes.")
 
+
 def get_from_to(node1, node2):
     if node1 < node2:
         return (node1, node2)
     else:
         return (node2, node1)
+
 
 def graph_merge(g1: nx.Graph, g2: nx.Graph, change: GraphChange):
     """Merge graph g2 into g1 in place."""
@@ -225,6 +228,7 @@ def graph_merge(g1: nx.Graph, g2: nx.Graph, change: GraphChange):
         g1.graph["source_id"] = []
     g1.graph["source_id"] += g2.graph.get("source_id", [])
     return g1
+
 
 def compute_args_hash(*args):
     return md5(str(args).encode()).hexdigest()
@@ -261,9 +265,7 @@ def handle_single_relationship_extraction(record_attributes: list[str], chunk_ke
 
     edge_keywords = clean_str(record_attributes[4])
     edge_source_id = chunk_key
-    weight = (
-        float(record_attributes[-1]) if is_float_regex(record_attributes[-1]) else 1.0
-    )
+    weight = float(record_attributes[-1]) if is_float_regex(record_attributes[-1]) else 1.0
     pair = sorted([source.upper(), target.upper()])
     return dict(
         src_id=pair[0],
@@ -278,9 +280,7 @@ def handle_single_relationship_extraction(record_attributes: list[str], chunk_ke
 
 def pack_user_ass_to_openai_messages(*args: str):
     roles = ["user", "assistant"]
-    return [
-        {"role": roles[i % 2], "content": content} for i, content in enumerate(args)
-    ]
+    return [{"role": roles[i % 2], "content": content} for i, content in enumerate(args)]
 
 
 def split_string_by_multi_markers(content: str, markers: list[str]) -> list[str]:
@@ -311,7 +311,7 @@ async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks):
         "content_ltks": rag_tokenizer.tokenize(meta["description"]),
         "source_id": meta["source_id"],
         "kb_id": kb_id,
-        "available_int": 0
+        "available_int": 0,
     }
     chunk["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(chunk["content_ltks"])
     ebd = get_embed_cache(embd_mdl.llm_name, ent_name)
@@ -332,13 +332,7 @@ def get_relation(tenant_id, kb_id, from_ent_name, to_ent_name, size=1):
         to_ent_name = [to_ent_name]
     ents.extend(to_ent_name)
     ents = list(set(ents))
-    conds = {
-        "fields": ["content_with_weight"],
-        "size": size,
-        "from_entity_kwd": ents,
-        "to_entity_kwd": ents,
-        "knowledge_graph_kwd": ["relation"]
-    }
+    conds = {"fields": ["content_with_weight"], "size": size, "from_entity_kwd": ents, "to_entity_kwd": ents, "knowledge_graph_kwd": ["relation"]}
     res = []
     es_res = settings.retrievaler.search(conds, search.index_name(tenant_id), [kb_id] if isinstance(kb_id, str) else kb_id)
     for id in es_res.ids:
@@ -363,18 +357,19 @@ async def graph_edge_to_chunk(kb_id, embd_mdl, from_ent_name, to_ent_name, meta,
         "source_id": meta["source_id"],
         "weight_int": int(meta["weight"]),
         "kb_id": kb_id,
-        "available_int": 0
+        "available_int": 0,
     }
     chunk["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(chunk["content_ltks"])
     txt = f"{from_ent_name}->{to_ent_name}"
     ebd = get_embed_cache(embd_mdl.llm_name, txt)
     if ebd is None:
-        ebd, _ = await trio.to_thread.run_sync(lambda: embd_mdl.encode([txt+f": {meta['description']}"]))
+        ebd, _ = await trio.to_thread.run_sync(lambda: embd_mdl.encode([txt + f": {meta['description']}"]))
         ebd = ebd[0]
         set_embed_cache(embd_mdl.llm_name, txt, ebd)
     assert ebd is not None
     chunk["q_%d_vec" % len(ebd)] = ebd
     chunks.append(chunk)
+
 
 async def does_graph_contains(tenant_id, kb_id, doc_id):
     # Get doc_ids of graph
@@ -390,13 +385,9 @@ async def does_graph_contains(tenant_id, kb_id, doc_id):
         graph_doc_ids = set(fields2[chunk_id]["source_id"])
     return doc_id in graph_doc_ids
 
+
 async def get_graph_doc_ids(tenant_id, kb_id) -> list[str]:
-    conds = {
-        "fields": ["source_id"],
-        "removed_kwd": "N",
-        "size": 1,
-        "knowledge_graph_kwd": ["graph"]
-    }
+    conds = {"fields": ["source_id"], "removed_kwd": "N", "size": 1, "knowledge_graph_kwd": ["graph"]}
     res = await trio.to_thread.run_sync(lambda: settings.retrievaler.search(conds, search.index_name(tenant_id), [kb_id]))
     doc_ids = []
     if res.total == 0:
@@ -407,11 +398,7 @@ async def get_graph_doc_ids(tenant_id, kb_id) -> list[str]:
 
 
 async def get_graph(tenant_id, kb_id, exclude_rebuild=None):
-    conds = {
-        "fields": ["content_with_weight", "removed_kwd", "source_id"],
-        "size": 1,
-        "knowledge_graph_kwd": ["graph"]
-    }
+    conds = {"fields": ["content_with_weight", "removed_kwd", "source_id"], "size": 1, "knowledge_graph_kwd": ["graph"]}
     res = await trio.to_thread.run_sync(lambda: settings.retrievaler.search(conds, search.index_name(tenant_id), [kb_id]))
     if not res.total == 0:
         for id in res.ids:
@@ -440,38 +427,46 @@ async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, chang
     if change.removed_edges:
         async with trio.open_nursery() as nursery:
             for from_node, to_node in change.removed_edges:
-                 nursery.start_soon(lambda from_node=from_node, to_node=to_node: trio.to_thread.run_sync(lambda: settings.docStoreConn.delete({"knowledge_graph_kwd": ["relation"], "from_entity_kwd": from_node, "to_entity_kwd": to_node}, search.index_name(tenant_id), kb_id)))
+                nursery.start_soon(
+                    lambda from_node=from_node, to_node=to_node: trio.to_thread.run_sync(
+                        lambda: settings.docStoreConn.delete({"knowledge_graph_kwd": ["relation"], "from_entity_kwd": from_node, "to_entity_kwd": to_node}, search.index_name(tenant_id), kb_id)
+                    )
+                )
     now = trio.current_time()
     if callback:
         callback(msg=f"set_graph removed {len(change.removed_nodes)} nodes and {len(change.removed_edges)} edges from index in {now - start:.2f}s.")
     start = now
 
-    chunks = [{
-        "id": get_uuid(),
-        "content_with_weight": json.dumps(nx.node_link_data(graph, edges="edges"), ensure_ascii=False),
-        "knowledge_graph_kwd": "graph",
-        "kb_id": kb_id,
-        "source_id": graph.graph.get("source_id", []),
-        "available_int": 0,
-        "removed_kwd": "N"
-    }]
-    
+    chunks = [
+        {
+            "id": get_uuid(),
+            "content_with_weight": json.dumps(nx.node_link_data(graph, edges="edges"), ensure_ascii=False),
+            "knowledge_graph_kwd": "graph",
+            "kb_id": kb_id,
+            "source_id": graph.graph.get("source_id", []),
+            "available_int": 0,
+            "removed_kwd": "N",
+        }
+    ]
+
     # generate updated subgraphs
     for source in graph.graph["source_id"]:
         subgraph = graph.subgraph([n for n in graph.nodes if source in graph.nodes[n]["source_id"]]).copy()
         subgraph.graph["source_id"] = [source]
         for n in subgraph.nodes:
             subgraph.nodes[n]["source_id"] = [source]
-        chunks.append({
-            "id": get_uuid(),
-            "content_with_weight": json.dumps(nx.node_link_data(subgraph, edges="edges"), ensure_ascii=False),
-            "knowledge_graph_kwd": "subgraph",
-            "kb_id": kb_id,
-            "source_id": [source],
-            "available_int": 0,
-            "removed_kwd": "N"
-        })
-    
+        chunks.append(
+            {
+                "id": get_uuid(),
+                "content_with_weight": json.dumps(nx.node_link_data(subgraph, edges="edges"), ensure_ascii=False),
+                "knowledge_graph_kwd": "subgraph",
+                "kb_id": kb_id,
+                "source_id": [source],
+                "available_int": 0,
+                "removed_kwd": "N",
+            }
+        )
+
     async with trio.open_nursery() as nursery:
         for node in change.added_updated_nodes:
             node_attrs = graph.nodes[node]
@@ -489,7 +484,7 @@ async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, chang
 
     es_bulk_size = 4
     for b in range(0, len(chunks), es_bulk_size):
-        doc_store_result = await trio.to_thread.run_sync(lambda: settings.docStoreConn.insert(chunks[b:b + es_bulk_size], search.index_name(tenant_id), kb_id))
+        doc_store_result = await trio.to_thread.run_sync(lambda: settings.docStoreConn.insert(chunks[b : b + es_bulk_size], search.index_name(tenant_id), kb_id))
         if doc_store_result:
             error_message = f"Insert chunk error: {doc_store_result}, please check log file and Elasticsearch/Infinity status!"
             raise Exception(error_message)
@@ -511,10 +506,10 @@ def is_continuous_subsequence(subseq, seq):
                 break
         return indexes
 
-    index_list = find_all_indexes(seq,subseq[0])
+    index_list = find_all_indexes(seq, subseq[0])
     for idx in index_list:
-        if idx!=len(seq)-1:
-            if seq[idx+1]==subseq[-1]:
+        if idx != len(seq) - 1:
+            if seq[idx + 1] == subseq[-1]:
                 return True
     return False
 
@@ -541,10 +536,7 @@ def merge_tuples(list1, list2):
 
 
 async def get_entity_type2sampels(idxnms, kb_ids: list):
-    es_res = await trio.to_thread.run_sync(lambda: settings.retrievaler.search({"knowledge_graph_kwd": "ty2ents", "kb_id": kb_ids,
-                                       "size": 10000,
-                                       "fields": ["content_with_weight"]},
-                                      idxnms, kb_ids))
+    es_res = await trio.to_thread.run_sync(lambda: settings.retrievaler.search({"knowledge_graph_kwd": "ty2ents", "kb_id": kb_ids, "size": 10000, "fields": ["content_with_weight"]}, idxnms, kb_ids))
 
     res = defaultdict(list)
     for id in es_res.ids:
@@ -576,13 +568,10 @@ async def rebuild_graph(tenant_id, kb_id, exclude_rebuild=None):
     graph = nx.Graph()
     flds = ["knowledge_graph_kwd", "content_with_weight", "source_id"]
     bs = 256
-    for i in range(0, 1024*bs, bs):
-        es_res = await trio.to_thread.run_sync(lambda: settings.docStoreConn.search(flds, [],
-                                 {"kb_id": kb_id, "knowledge_graph_kwd": ["subgraph"]},
-                                 [],
-                                 OrderByExpr(),
-                                 i, bs, search.index_name(tenant_id), [kb_id]
-                                 ))
+    for i in range(0, 1024 * bs, bs):
+        es_res = await trio.to_thread.run_sync(
+            lambda: settings.docStoreConn.search(flds, [], {"kb_id": kb_id, "knowledge_graph_kwd": ["subgraph"]}, [], OrderByExpr(), i, bs, search.index_name(tenant_id), [kb_id])
+        )
         # tot = settings.docStoreConn.getTotal(es_res)
         es_res = settings.docStoreConn.getFields(es_res, flds)
 
@@ -596,13 +585,10 @@ async def rebuild_graph(tenant_id, kb_id, exclude_rebuild=None):
                     continue
             elif exclude_rebuild in d["source_id"]:
                 continue
-            
+
             next_graph = json_graph.node_link_graph(json.loads(d["content_with_weight"]), edges="edges")
             merged_graph = nx.compose(graph, next_graph)
-            merged_source = {
-                n: graph.nodes[n]["source_id"] + next_graph.nodes[n]["source_id"]
-                for n in graph.nodes & next_graph.nodes
-            }
+            merged_source = {n: graph.nodes[n]["source_id"] + next_graph.nodes[n]["source_id"] for n in graph.nodes & next_graph.nodes}
             nx.set_node_attributes(merged_graph, merged_source, "source_id")
             if "source_id" in graph.graph:
                 merged_graph.graph["source_id"] = graph.graph["source_id"] + next_graph.graph["source_id"]

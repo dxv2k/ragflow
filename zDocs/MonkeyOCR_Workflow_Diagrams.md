@@ -9,49 +9,49 @@ graph TD
     subgraph "📁 User Request"
         USER["User uploads document<br/>via Python SDK"]
     end
-    
+
     subgraph "📁 /api/db - Database Layer"
         DBINIT["/api/db/__init__.py<br/>ParserType.MONKEY_OCR"]
         DBMODELS["/api/db/db_models.py<br/>Document & File models"]
         INITDATA["/api/db/init_data.py<br/>parser_ids registration"]
-        
+
         subgraph "📁 /api/db/services"
             FILESVC["/api/db/services/file_service.py<br/>get_parser() method"]
             DOCSVC["/api/db/services/document_service.py<br/>Document operations"]
             KBSVC["/api/db/services/knowledgebase_service.py<br/>KB operations"]
         end
     end
-    
+
     subgraph "📁 /rag - Processing Layer"
         RAGSETTINGS["/rag/settings.py<br/>Configuration"]
-        
+
         subgraph "📁 /rag/app"
             RAGFACTORY["/rag/app/__init__.py<br/>FACTORY dictionary"]
             MONKEYPARSER["/rag/app/monkey_ocr_parser.py<br/>chunk() function"]
         end
-        
+
         subgraph "📁 /rag/nlp"
             TOKENIZER["/rag/nlp/<br/>tokenize functions"]
         end
     end
-    
+
     subgraph "📁 /deepdoc - Vision Layer"
         DEEPINIT["/deepdoc/__init__.py<br/>Module initialization"]
-        
+
         subgraph "📁 /deepdoc/vision"
             VISIONINIT["/deepdoc/vision/__init__.py<br/>Export MonkeyOCR class"]
             MONKEYOCR["/deepdoc/vision/monkey_ocr.py<br/>MonkeyOCR class<br/>load→process→unload"]
         end
-        
+
         subgraph "📁 /deepdoc/parser"
             PARSERS["/deepdoc/parser/<br/>Other document parsers"]
         end
     end
-    
+
     subgraph "📦 MonkeyOCR Source"
         MONKEYSRC["/monkeyocr/<br/>Local MonkeyOCR source<br/>UNIPipe, OCRPipe"]
     end
-    
+
     subgraph "💾 Storage"
         DB[(Database<br/>Documents & Chunks)]
         ES[(Elasticsearch<br/>Search Index)]
@@ -64,20 +64,20 @@ graph TD
     FILESVC --> DBMODELS
     DBINIT --> INITDATA
     FILESVC --> RAGFACTORY
-    
+
     RAGFACTORY --> MONKEYPARSER
     MONKEYPARSER --> VISIONINIT
     VISIONINIT --> MONKEYOCR
     MONKEYOCR --> MONKEYSRC
-    
+
     MONKEYPARSER --> TOKENIZER
     MONKEYPARSER --> DOCSVC
     DOCSVC --> DBMODELS
     DOCSVC --> DB
-    
+
     MONKEYPARSER --> ES
     FILESVC --> STORAGE
-    
+
     KBSVC --> DB
     RAGSETTINGS --> MONKEYPARSER
 
@@ -139,12 +139,12 @@ sequenceDiagram
     USER->>+FACTORY: parse_documents(doc_ids)
     FACTORY->>FACTORY: lookup parser for "monkey_ocr"
     FACTORY->>+PARSER: chunk(filename, binary, **kwargs)
-    
+
     PARSER->>PARSER: callback(0.1, "Initializing MonkeyOCR...")
     PARSER->>+VISION: MonkeyOCR()
     VISION->>VISION: __init__(model_dir=None)
     VISION-->>-PARSER: MonkeyOCR instance
-    
+
     PARSER->>+VISION: get_markdown_result(file_path, config)
     VISION->>VISION: load_model()
     VISION->>+SOURCE: UNIPipe(pdf_res_path, model_type)
@@ -157,28 +157,28 @@ sequenceDiagram
 
     PARSER->>PARSER: callback(0.5, "Converting to RAGFlow chunks...")
     PARSER->>PARSER: convert_to_ragflow_chunks(result, filename, lang)
-    
+
     loop For each structure element
         PARSER->>+TOKENIZER: tokenize(doc, element_text, eng)
         TOKENIZER->>TOKENIZER: process content<br/>- create content_ltks<br/>- extract keywords<br/>- generate tokens
         TOKENIZER-->>-PARSER: tokenized content
-        
+
         PARSER->>PARSER: create chunk with MonkeyOCR metadata<br/>img_id = JSON(structure_type, bbox, confidence)
     end
-    
+
     PARSER->>PARSER: callback(0.8, "Storing chunks...")
     PARSER->>+DOCSVC: update document status
     DOCSVC->>+DB: UPDATE documents SET chunk_num, status, progress
     DB-->>-DOCSVC: updated
     DOCSVC-->>-PARSER: document updated
-    
+
     loop For each chunk
         PARSER->>+DB: INSERT INTO chunks
         DB-->>-PARSER: chunk stored
         PARSER->>+ES: index chunk for search
         ES-->>-PARSER: indexed
     end
-    
+
     PARSER->>PARSER: callback(1.0, "Processing complete")
     PARSER-->>-FACTORY: [chunk1, chunk2, ..., chunkN]
     FACTORY-->>-USER: processing completed
@@ -265,4 +265,4 @@ Database (structured data) + Elasticsearch (search index) + File storage (binari
 5. **Model Integration**: `/monkeyocr/` local source
 6. **Data Storage**: Existing RAGFlow database schema
 
-This workflow ensures MonkeyOCR integrates seamlessly with RAGFlow's existing architecture while maintaining the load→process→unload memory management strategy! 🚀 
+This workflow ensures MonkeyOCR integrates seamlessly with RAGFlow's existing architecture while maintaining the load→process→unload memory management strategy! 🚀

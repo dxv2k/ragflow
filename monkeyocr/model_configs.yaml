@@ -4,7 +4,7 @@ weights:
   # PP-DocLayout_plus-L: Structure/PP-DocLayout_plus-L
   layoutreader: Relation
 models_dir: /app/monkeyocr/model_weight
-layout_config: 
+layout_config:
   model: doclayout_yolo # PP-DocLayout_plus-L (used by MonkeyOCR-pro) / doclayout_yolo
   reader:
     name: layoutreader
@@ -18,7 +18,7 @@ chat_config:
     queue_timeout: 1 # seconds to wait for batching requests
     max_queue_size: 2000 # maximum requests in queue
 
-# Uncomment the following lines if use `api` as backend 
+# Uncomment the following lines if use `api` as backend
 # api_config:
 #   url: https://api.openai.com/v1
 #   model_name: gpt-4.1

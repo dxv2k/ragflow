@@ -136,12 +136,12 @@ output_cedd/
 </details>
 
 > [!TIP]
-> 
+>
 > For Chinese scenarios, or cases where text, tables, etc. are mistakenly recognized as images, you can try using the following structure detection model: [layout\_zh.pt](https://huggingface.co/echo840/MonkeyOCR/blob/main/Structure/layout_zh.pt).
 > (If the model is not found in `model_weight/Structure/`, you can download it manually.)
-> 
-> To use this model, update the configuration file [`model_configs.yaml`](https://github.com/Yuliang-Liu/MonkeyOCR/blob/main/model_configs.yaml#L3) as follows:  
-> 
+>
+> To use this model, update the configuration file [`model_configs.yaml`](https://github.com/Yuliang-Liu/MonkeyOCR/blob/main/model_configs.yaml#L3) as follows:
+>
 > ```yaml
 > doclayout_yolo: Structure/layout_zh.pt
 > ```
@@ -231,7 +231,7 @@ Once the API service is running, you can access the API documentation at http://
    ```
    Once the API service is running, you can access the API documentation at http://localhost:7861/docs to explore available endpoints.
 
-## Windows Support 
+## Windows Support
 
 See the [Windows Support](docs/windows_support.md) Guide for details.
 
@@ -251,14 +251,14 @@ MonkeyOCR is a comprehensive document understanding system that combines multipl
 graph TB
     %% Client Layer
     Client[Client Applications]
-    
+
     %% API Gateway Layer
     subgraph "FastAPI Gateway"
         FastAPI[FastAPI Server<br/>Port: 7861]
         StaticFiles[Static Files<br/>/static]
         HealthCheck[Health Check<br/>/health]
     end
-    
+
     %% Core API Endpoints
     subgraph "Core API Endpoints"
         OCR[OCR Endpoints<br/>/ocr/text, /ocr/formula, /ocr/table]
@@ -266,7 +266,7 @@ graph TB
         OMR[OMR Endpoints<br/>/omr/classify, /omr/extract, /omr/process]
         Enhanced[Enhanced Parse<br/>/parse/enhanced]
     end
-    
+
     %% Model Layer
     subgraph "AI Model Layer"
         MonkeyOCR[MonkeyOCR Model]
@@ -274,7 +274,7 @@ graph TB
         ChatModel[Vision Language Model<br/>Qwen2.5-VL]
         LayoutReader[Layout Reader<br/>LayoutLMv3]
     end
-    
+
     %% Processing Pipeline
     subgraph "Processing Pipeline"
         PDFParser[PDF Parser<br/>PyMuPDF]
@@ -283,7 +283,7 @@ graph TB
         OMRProcessor[OMR Processor<br/>OpenCV + Hough Transform]
         OCRProcessor[OCR Processor<br/>MonkeyOCR]
     end
-    
+
     %% Backend Services
     subgraph "Backend Services"
         ThreadPool[Thread Pool Executor]
@@ -291,7 +291,7 @@ graph TB
         ModelLock[Model Lock Manager]
         TempFileManager[Temp File Manager]
     end
-    
+
     %% Storage Layer
     subgraph "Storage Layer"
         TempDir[Temporary Directory<br/>/tmp]
@@ -299,17 +299,17 @@ graph TB
         ModelWeights[Model Weights<br/>/model_weight]
         StaticStorage[Static Storage<br/>/static]
     end
-    
+
     %% External Dependencies
     subgraph "External Dependencies"
         CUDA[CUDA GPU<br/>NVIDIA]
         Docker[Docker Container<br/>GPU Support]
         Environment[Environment Variables<br/>.env]
     end
-    
+
     %% Client Connections
     Client --> FastAPI
-    
+
     %% API Gateway Connections
     FastAPI --> OCR
     FastAPI --> Parse
@@ -317,7 +317,7 @@ graph TB
     FastAPI --> Enhanced
     FastAPI --> StaticFiles
     FastAPI --> HealthCheck
-    
+
     %% Endpoint to Model Connections
     OCR --> MonkeyOCR
     Parse --> MonkeyOCR
@@ -325,35 +325,35 @@ graph TB
     Enhanced --> MonkeyOCR
     Enhanced --> OMRProcessor
     Enhanced --> OCRProcessor
-    
+
     %% Model Layer Connections
     MonkeyOCR --> LayoutModel
     MonkeyOCR --> ChatModel
     MonkeyOCR --> LayoutReader
-    
+
     %% Processing Pipeline Connections
     LayoutModel --> PDFParser
     ChatModel --> TextExtractor
     OMRProcessor --> ImageExtractor
     OCRProcessor --> TextExtractor
-    
+
     %% Backend Service Connections
     MonkeyOCR --> ThreadPool
     MonkeyOCR --> AsyncQueue
     MonkeyOCR --> ModelLock
     FastAPI --> TempFileManager
-    
+
     %% Storage Connections
     TempFileManager --> TempDir
     PDFParser --> OutputDir
     LayoutModel --> ModelWeights
     StaticFiles --> StaticStorage
-    
+
     %% External Dependencies
     MonkeyOCR --> CUDA
     FastAPI --> Docker
     FastAPI --> Environment
-    
+
     %% Styling
     classDef clientClass fill:#e1f5fe
     classDef apiClass fill:#f3e5f5
@@ -361,7 +361,7 @@ graph TB
     classDef processClass fill:#fff3e0
     classDef storageClass fill:#fce4ec
     classDef externalClass fill:#f1f8e9
-    
+
     class Client clientClass
     class FastAPI,OCR,Parse,OMR,Enhanced apiClass
     class MonkeyOCR,LayoutModel,ChatModel,LayoutReader modelClass
@@ -381,15 +381,15 @@ sequenceDiagram
     participant OCRProcessor
     participant FileManager
     participant ResponseBuilder
-    
+
     Client->>FastAPI: POST /parse/enhanced (PDF file)
     FastAPI->>FileManager: Save uploaded PDF to temp
-    
+
     Note over FastAPI: Step 1: PDF Parsing
     FastAPI->>PDFParser: Parse PDF document
     PDFParser->>PDFParser: Extract images and generate markdown
     PDFParser-->>FastAPI: Return markdown + images directory
-    
+
     Note over FastAPI: Step 2: Image Processing Loop
     loop For each extracted image
         FastAPI->>OMRProcessor: Classify image type
@@ -403,7 +403,7 @@ sequenceDiagram
         end
         FastAPI->>FileManager: Replace image reference in markdown
     end
-    
+
     Note over FastAPI: Step 3: Save Results
     FastAPI->>FileManager: Save enhanced markdown file
     FastAPI->>ResponseBuilder: Build comprehensive response
@@ -421,19 +421,19 @@ flowchart TD
     D --> E[Contour Analysis]
     E --> F[Pattern Recognition]
     F --> G{Multiple Choice Form?}
-    
+
     G -->|Yes| H[Circle Detection]
     G -->|No| I[Text/Handwriting]
-    
+
     H --> J[Row Grouping]
     J --> K[Pixel Density Analysis]
     K --> L[Rating Extraction]
     L --> M[Rating Codes Generation]
     M --> N[Formatted Output]
-    
+
     I --> O[OCR Processing]
     O --> P[Text Extraction]
-    
+
     N --> Q[Final Response]
     P --> Q
 ```
@@ -580,4 +580,4 @@ Environment Variables
 - Performance metrics
 - Resource utilization
 
-This architecture provides a robust, scalable, and efficient system for document understanding with support for multiple AI models, concurrent processing, and comprehensive error handling. 
+This architecture provides a robust, scalable, and efficient system for document understanding with support for multiple AI models, concurrent processing, and comprehensive error handling.

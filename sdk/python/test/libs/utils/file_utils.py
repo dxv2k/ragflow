@@ -84,24 +84,14 @@ def create_json_file(path):
 
 
 def create_eml_file(path):
-    eml_content = (
-        "From: sender@example.com\n"
-        "To: receiver@example.com\n"
-        "Subject: 测试 EML 文件\n\n"
-        "这是一封测试邮件的内容。\n"
-    )
+    eml_content = "From: sender@example.com\nTo: receiver@example.com\nSubject: 测试 EML 文件\n\n这是一封测试邮件的内容。\n"
     with open(path, "w", encoding="utf-8") as f:
         f.write(eml_content)
     return path
 
 
 def create_html_file(path):
-    html_content = (
-        "<html>\n"
-        "<head><title>测试 HTML 文件</title></head>\n"
-        "<body><h1>这是一个测试 HTML 文件</h1></body>\n"
-        "</html>"
-    )
+    html_content = "<html>\n<head><title>测试 HTML 文件</title></head>\n<body><h1>这是一个测试 HTML 文件</h1></body>\n</html>"
     with open(path, "w", encoding="utf-8") as f:
         f.write(html_content)
     return path

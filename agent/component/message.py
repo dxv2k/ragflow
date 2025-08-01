@@ -20,10 +20,10 @@ from agent.component.base import ComponentBase, ComponentParamBase
 
 
 class MessageParam(ComponentParamBase):
-
     """
     Define the Message component parameters.
     """
+
     def __init__(self):
         super().__init__()
         self.messages = []
@@ -49,5 +49,3 @@ class Message(ComponentBase, ABC):
             yield res
 
         self.set_output(res)
-
-

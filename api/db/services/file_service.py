@@ -461,11 +461,12 @@ class FileService(CommonService):
     @staticmethod
     def parse_docs(file_objs, user_id):
         from rag.app import audio, email, naive, picture, presentation
+        from rag.app.monkey_ocr_parser import chunk as monkey_ocr
 
         def dummy(prog=None, msg=""):
             pass
 
-        FACTORY = {ParserType.PRESENTATION.value: presentation, ParserType.PICTURE.value: picture, ParserType.AUDIO.value: audio, ParserType.EMAIL.value: email}
+        FACTORY = {ParserType.PRESENTATION.value: presentation, ParserType.PICTURE.value: picture, ParserType.AUDIO.value: audio, ParserType.EMAIL.value: email, ParserType.MONKEYOCR.value: monkey_ocr}
         parser_config = {"chunk_token_num": 16096, "delimiter": "\n!?;。；！？", "layout_recognize": "Plain Text"}
         exe = ThreadPoolExecutor(max_workers=12)
         threads = []
@@ -492,4 +493,3 @@ class FileService(CommonService):
         if re.search(r"\.(eml)$", filename):
             return ParserType.EMAIL.value
         return default
-

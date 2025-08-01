@@ -37,14 +37,9 @@ class RAGFlowMinio:
             pass
 
         try:
-            self.conn = Minio(settings.MINIO["host"],
-                              access_key=settings.MINIO["user"],
-                              secret_key=settings.MINIO["password"],
-                              secure=False
-                              )
+            self.conn = Minio(settings.MINIO["host"], access_key=settings.MINIO["user"], secret_key=settings.MINIO["password"], secure=False)
         except Exception:
-            logging.exception(
-                "Fail to connect %s " % settings.MINIO["host"])
+            logging.exception("Fail to connect %s " % settings.MINIO["host"])
 
     def __close__(self):
         del self.conn
@@ -54,10 +49,7 @@ class RAGFlowMinio:
         bucket, fnm, binary = "txtxtxtxt1", "txtxtxtxt1", b"_t@@@1"
         if not self.conn.bucket_exists(bucket):
             self.conn.make_bucket(bucket)
-        r = self.conn.put_object(bucket, fnm,
-                                 BytesIO(binary),
-                                 len(binary)
-                                 )
+        r = self.conn.put_object(bucket, fnm, BytesIO(binary), len(binary))
         return r
 
     def put(self, bucket, fnm, binary):
@@ -66,10 +58,7 @@ class RAGFlowMinio:
                 if not self.conn.bucket_exists(bucket):
                     self.conn.make_bucket(bucket)
 
-                r = self.conn.put_object(bucket, fnm,
-                                         BytesIO(binary),
-                                         len(binary)
-                                         )
+                r = self.conn.put_object(bucket, fnm, BytesIO(binary), len(binary))
                 return r
             except Exception:
                 logging.exception(f"Fail to put {bucket}/{fnm}:")
@@ -117,4 +106,3 @@ class RAGFlowMinio:
                 self.__open__()
                 time.sleep(1)
         return
-

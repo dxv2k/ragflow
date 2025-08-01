@@ -1,7 +1,6 @@
 import fitz
 from magic_pdf.config.constants import CROSS_PAGE
-from magic_pdf.config.ocr_content_type import (BlockType, CategoryId,
-                                               ContentType)
+from magic_pdf.config.ocr_content_type import BlockType, CategoryId, ContentType
 from magic_pdf.data.dataset import Dataset
 from magic_pdf.model.magic_model import MagicModel
 
@@ -63,9 +62,7 @@ def draw_bbox_with_number(i, bbox_list, page, rgb_config, fill_config, draw_bbox
                     width=0.5,
                     overlay=True,
                 )  # Draw the rectangle
-        page.insert_text(
-            (x1 + 2, y0 + 10), str(j + 1), fontsize=10, color=new_rgb
-        )  # Insert the index in the top left corner of the rectangle
+        page.insert_text((x1 + 2, y0 + 10), str(j + 1), fontsize=10, color=new_rgb)  # Insert the index in the top left corner of the rectangle
 
 
 def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
@@ -80,7 +77,6 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
     lists_list = []
     indexs_list = []
     for page in pdf_info:
-
         page_dropped_list = []
         tables, tables_body, tables_caption, tables_footnote = [], [], [], []
         imgs, imgs_body, imgs_caption, imgs_footnote = [], [], [], []
@@ -90,40 +86,40 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
         lists = []
         indices = []
 
-        for dropped_bbox in page['discarded_blocks']:
-            page_dropped_list.append(dropped_bbox['bbox'])
+        for dropped_bbox in page["discarded_blocks"]:
+            page_dropped_list.append(dropped_bbox["bbox"])
         dropped_bbox_list.append(page_dropped_list)
-        for block in page['para_blocks']:
-            bbox = block['bbox']
-            if block['type'] == BlockType.Table:
+        for block in page["para_blocks"]:
+            bbox = block["bbox"]
+            if block["type"] == BlockType.Table:
                 tables.append(bbox)
-                for nested_block in block['blocks']:
-                    bbox = nested_block['bbox']
-                    if nested_block['type'] == BlockType.TableBody:
+                for nested_block in block["blocks"]:
+                    bbox = nested_block["bbox"]
+                    if nested_block["type"] == BlockType.TableBody:
                         tables_body.append(bbox)
-                    elif nested_block['type'] == BlockType.TableCaption:
+                    elif nested_block["type"] == BlockType.TableCaption:
                         tables_caption.append(bbox)
-                    elif nested_block['type'] == BlockType.TableFootnote:
+                    elif nested_block["type"] == BlockType.TableFootnote:
                         tables_footnote.append(bbox)
-            elif block['type'] == BlockType.Image:
+            elif block["type"] == BlockType.Image:
                 imgs.append(bbox)
-                for nested_block in block['blocks']:
-                    bbox = nested_block['bbox']
-                    if nested_block['type'] == BlockType.ImageBody:
+                for nested_block in block["blocks"]:
+                    bbox = nested_block["bbox"]
+                    if nested_block["type"] == BlockType.ImageBody:
                         imgs_body.append(bbox)
-                    elif nested_block['type'] == BlockType.ImageCaption:
+                    elif nested_block["type"] == BlockType.ImageCaption:
                         imgs_caption.append(bbox)
-                    elif nested_block['type'] == BlockType.ImageFootnote:
+                    elif nested_block["type"] == BlockType.ImageFootnote:
                         imgs_footnote.append(bbox)
-            elif block['type'] == BlockType.Title:
+            elif block["type"] == BlockType.Title:
                 titles.append(bbox)
-            elif block['type'] == BlockType.Text:
+            elif block["type"] == BlockType.Text:
                 texts.append(bbox)
-            elif block['type'] == BlockType.InterlineEquation:
+            elif block["type"] == BlockType.InterlineEquation:
                 interequations.append(bbox)
-            elif block['type'] == BlockType.List:
+            elif block["type"] == BlockType.List:
                 lists.append(bbox)
-            elif block['type'] == BlockType.Index:
+            elif block["type"] == BlockType.Index:
                 indices.append(bbox)
 
         tables_list.append(tables)
@@ -142,39 +138,34 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
 
     layout_bbox_list = []
 
-    table_type_order = {
-        'table_caption': 1,
-        'table_body': 2,
-        'table_footnote': 3
-    }
+    table_type_order = {"table_caption": 1, "table_body": 2, "table_footnote": 3}
     for page in pdf_info:
         page_block_list = []
-        for block in page['para_blocks']:
-            if block['type'] in [
+        for block in page["para_blocks"]:
+            if block["type"] in [
                 BlockType.Text,
                 BlockType.Title,
                 BlockType.InterlineEquation,
                 BlockType.List,
                 BlockType.Index,
             ]:
-                bbox = block['bbox']
+                bbox = block["bbox"]
                 page_block_list.append(bbox)
-            elif block['type'] in [BlockType.Image]:
-                for sub_block in block['blocks']:
-                    bbox = sub_block['bbox']
+            elif block["type"] in [BlockType.Image]:
+                for sub_block in block["blocks"]:
+                    bbox = sub_block["bbox"]
                     page_block_list.append(bbox)
-            elif block['type'] in [BlockType.Table]:
-                sorted_blocks = sorted(block['blocks'], key=lambda x: table_type_order[x['type']])
+            elif block["type"] in [BlockType.Table]:
+                sorted_blocks = sorted(block["blocks"], key=lambda x: table_type_order[x["type"]])
                 for sub_block in sorted_blocks:
-                    bbox = sub_block['bbox']
+                    bbox = sub_block["bbox"]
                     page_block_list.append(bbox)
 
         layout_bbox_list.append(page_block_list)
 
-    pdf_docs = fitz.open('pdf', pdf_bytes)
+    pdf_docs = fitz.open("pdf", pdf_bytes)
 
     for i, page in enumerate(pdf_docs):
-
         draw_bbox_without_number(i, dropped_bbox_list, page, [158, 158, 158], True)
         # draw_bbox_without_number(i, tables_list, page, [153, 153, 0], True)  # color !
         draw_bbox_without_number(i, tables_body_list, page, [204, 204, 0], True)
@@ -183,19 +174,17 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
         # draw_bbox_without_number(i, imgs_list, page, [51, 102, 0], True)
         draw_bbox_without_number(i, imgs_body_list, page, [153, 255, 51], True)
         draw_bbox_without_number(i, imgs_caption_list, page, [102, 178, 255], True)
-        draw_bbox_without_number(i, imgs_footnote_list, page, [255, 178, 102], True),
+        (draw_bbox_without_number(i, imgs_footnote_list, page, [255, 178, 102], True),)
         draw_bbox_without_number(i, titles_list, page, [102, 102, 255], True)
         draw_bbox_without_number(i, texts_list, page, [153, 0, 76], True)
         draw_bbox_without_number(i, interequations_list, page, [0, 255, 0], True)
         draw_bbox_without_number(i, lists_list, page, [40, 169, 92], True)
         draw_bbox_without_number(i, indexs_list, page, [40, 169, 92], True)
 
-        draw_bbox_with_number(
-            i, layout_bbox_list, page, [255, 0, 0], False, draw_bbox=False
-        )
+        draw_bbox_with_number(i, layout_bbox_list, page, [255, 0, 0], False, draw_bbox=False)
 
     # Save the PDF
-    pdf_docs.save(f'{out_path}/{filename}')
+    pdf_docs.save(f"{out_path}/{filename}")
 
 
 def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
@@ -209,22 +198,22 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
     next_page_inline_equation_list = []
 
     def get_span_info(span):
-        if span['type'] == ContentType.Text:
+        if span["type"] == ContentType.Text:
             if span.get(CROSS_PAGE, False):
-                next_page_text_list.append(span['bbox'])
+                next_page_text_list.append(span["bbox"])
             else:
-                page_text_list.append(span['bbox'])
-        elif span['type'] == ContentType.InlineEquation:
+                page_text_list.append(span["bbox"])
+        elif span["type"] == ContentType.InlineEquation:
             if span.get(CROSS_PAGE, False):
-                next_page_inline_equation_list.append(span['bbox'])
+                next_page_inline_equation_list.append(span["bbox"])
             else:
-                page_inline_equation_list.append(span['bbox'])
-        elif span['type'] == ContentType.InterlineEquation:
-            page_interline_equation_list.append(span['bbox'])
-        elif span['type'] == ContentType.Image:
-            page_image_list.append(span['bbox'])
-        elif span['type'] == ContentType.Table:
-            page_table_list.append(span['bbox'])
+                page_inline_equation_list.append(span["bbox"])
+        elif span["type"] == ContentType.InterlineEquation:
+            page_interline_equation_list.append(span["bbox"])
+        elif span["type"] == ContentType.Image:
+            page_image_list.append(span["bbox"])
+        elif span["type"] == ContentType.Table:
+            page_table_list.append(span["bbox"])
 
     for page in pdf_info:
         page_text_list = []
@@ -234,7 +223,6 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
         page_table_list = []
         page_dropped_list = []
 
-
         if len(next_page_text_list) > 0:
             page_text_list.extend(next_page_text_list)
             next_page_text_list.clear()
@@ -242,39 +230,36 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
             page_inline_equation_list.extend(next_page_inline_equation_list)
             next_page_inline_equation_list.clear()
 
-
-        for block in page['discarded_blocks']:
-            if block['type'] == BlockType.Discarded:
-                for line in block['lines']:
-                    for span in line['spans']:
-                        page_dropped_list.append(span['bbox'])
+        for block in page["discarded_blocks"]:
+            if block["type"] == BlockType.Discarded:
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        page_dropped_list.append(span["bbox"])
         dropped_list.append(page_dropped_list)
 
-
-        for block in page['preproc_blocks']:
-            if block['type'] in [
+        for block in page["preproc_blocks"]:
+            if block["type"] in [
                 BlockType.Text,
                 BlockType.Title,
                 BlockType.InterlineEquation,
                 BlockType.List,
                 BlockType.Index,
             ]:
-                for line in block['lines']:
-                    for span in line['spans']:
+                for line in block["lines"]:
+                    for span in line["spans"]:
                         get_span_info(span)
-            elif block['type'] in [BlockType.Image, BlockType.Table]:
-                for sub_block in block['blocks']:
-                    for line in sub_block['lines']:
-                        for span in line['spans']:
+            elif block["type"] in [BlockType.Image, BlockType.Table]:
+                for sub_block in block["blocks"]:
+                    for line in sub_block["lines"]:
+                        for span in line["spans"]:
                             get_span_info(span)
         text_list.append(page_text_list)
         inline_equation_list.append(page_inline_equation_list)
         interline_equation_list.append(page_interline_equation_list)
         image_list.append(page_image_list)
         table_list.append(page_table_list)
-    pdf_docs = fitz.open('pdf', pdf_bytes)
+    pdf_docs = fitz.open("pdf", pdf_bytes)
     for i, page in enumerate(pdf_docs):
-
         draw_bbox_without_number(i, text_list, page, [255, 0, 0], False)
         draw_bbox_without_number(i, inline_equation_list, page, [0, 255, 0], False)
         draw_bbox_without_number(i, interline_equation_list, page, [0, 0, 255], False)
@@ -283,7 +268,7 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
         draw_bbox_without_number(i, dropped_list, page, [158, 158, 158], False)
 
     # Save the PDF
-    pdf_docs.save(f'{out_path}/{filename}')
+    pdf_docs.save(f"{out_path}/{filename}")
 
 
 def draw_model_bbox(model_list, dataset: Dataset, out_path, filename):
@@ -302,28 +287,28 @@ def draw_model_bbox(model_list, dataset: Dataset, out_path, filename):
         texts = []
         interequations = []
         page_info = magic_model.get_model_list(i)
-        layout_dets = page_info['layout_dets']
+        layout_dets = page_info["layout_dets"]
         for layout_det in layout_dets:
-            bbox = layout_det['bbox']
-            if layout_det['category_id'] == CategoryId.Text:
+            bbox = layout_det["bbox"]
+            if layout_det["category_id"] == CategoryId.Text:
                 texts.append(bbox)
-            elif layout_det['category_id'] == CategoryId.Title:
+            elif layout_det["category_id"] == CategoryId.Title:
                 titles.append(bbox)
-            elif layout_det['category_id'] == CategoryId.TableBody:
+            elif layout_det["category_id"] == CategoryId.TableBody:
                 tables_body.append(bbox)
-            elif layout_det['category_id'] == CategoryId.TableCaption:
+            elif layout_det["category_id"] == CategoryId.TableCaption:
                 tables_caption.append(bbox)
-            elif layout_det['category_id'] == CategoryId.TableFootnote:
+            elif layout_det["category_id"] == CategoryId.TableFootnote:
                 tables_footnote.append(bbox)
-            elif layout_det['category_id'] == CategoryId.ImageBody:
+            elif layout_det["category_id"] == CategoryId.ImageBody:
                 imgs_body.append(bbox)
-            elif layout_det['category_id'] == CategoryId.ImageCaption:
+            elif layout_det["category_id"] == CategoryId.ImageCaption:
                 imgs_caption.append(bbox)
-            elif layout_det['category_id'] == CategoryId.InterlineEquation_YOLO:
+            elif layout_det["category_id"] == CategoryId.InterlineEquation_YOLO:
                 interequations.append(bbox)
-            elif layout_det['category_id'] == CategoryId.Abandon:
+            elif layout_det["category_id"] == CategoryId.Abandon:
                 page_dropped_list.append(bbox)
-            elif layout_det['category_id'] == CategoryId.ImageFootnote:
+            elif layout_det["category_id"] == CategoryId.ImageFootnote:
                 imgs_footnote.append(bbox)
 
         tables_body_list.append(tables_body)
@@ -339,9 +324,7 @@ def draw_model_bbox(model_list, dataset: Dataset, out_path, filename):
 
     for i in range(len(dataset)):
         page = dataset.get_page(i)
-        draw_bbox_with_number(
-            i, dropped_bbox_list, page, [158, 158, 158], True
-        )  # color !
+        draw_bbox_with_number(i, dropped_bbox_list, page, [158, 158, 158], True)  # color !
         draw_bbox_with_number(i, tables_body_list, page, [204, 204, 0], True)
         draw_bbox_with_number(i, tables_caption_list, page, [255, 255, 102], True)
         draw_bbox_with_number(i, tables_footnote_list, page, [229, 255, 204], True)
@@ -353,7 +336,7 @@ def draw_model_bbox(model_list, dataset: Dataset, out_path, filename):
         draw_bbox_with_number(i, interequations_list, page, [0, 255, 0], True)
 
     # Save the PDF
-    dataset.dump_to_file(f'{out_path}/{filename}')
+    dataset.dump_to_file(f"{out_path}/{filename}")
 
 
 def draw_line_sort_bbox(pdf_info, pdf_bytes, out_path, filename):
@@ -361,58 +344,65 @@ def draw_line_sort_bbox(pdf_info, pdf_bytes, out_path, filename):
 
     for page in pdf_info:
         page_line_list = []
-        for block in page['preproc_blocks']:
-            if block['type'] in [BlockType.Text]:
-                for line in block['lines']:
-                    bbox = line['bbox']
-                    index = line['index']
-                    page_line_list.append({'index': index, 'bbox': bbox})
-            elif block['type'] in [BlockType.Title, BlockType.InterlineEquation]:
-                if 'virtual_lines' in block:
-                    if len(block['virtual_lines']) > 0 and block['virtual_lines'][0].get('index', None) is not None:
-                        for line in block['virtual_lines']:
-                            bbox = line['bbox']
-                            index = line['index']
-                            page_line_list.append({'index': index, 'bbox': bbox})
+        for block in page["preproc_blocks"]:
+            if block["type"] in [BlockType.Text]:
+                for line in block["lines"]:
+                    bbox = line["bbox"]
+                    index = line["index"]
+                    page_line_list.append({"index": index, "bbox": bbox})
+            elif block["type"] in [BlockType.Title, BlockType.InterlineEquation]:
+                if "virtual_lines" in block:
+                    if len(block["virtual_lines"]) > 0 and block["virtual_lines"][0].get("index", None) is not None:
+                        for line in block["virtual_lines"]:
+                            bbox = line["bbox"]
+                            index = line["index"]
+                            page_line_list.append({"index": index, "bbox": bbox})
                 else:
-                    for line in block['lines']:
-                        bbox = line['bbox']
-                        index = line['index']
-                        page_line_list.append({'index': index, 'bbox': bbox})
-            elif block['type'] in [BlockType.Image, BlockType.Table]:
-                for sub_block in block['blocks']:
-                    if sub_block['type'] in [BlockType.ImageBody, BlockType.TableBody]:
-                        if len(sub_block['virtual_lines']) > 0 and sub_block['virtual_lines'][0].get('index', None) is not None:
-                            for line in sub_block['virtual_lines']:
-                                bbox = line['bbox']
-                                index = line['index']
-                                page_line_list.append({'index': index, 'bbox': bbox})
+                    for line in block["lines"]:
+                        bbox = line["bbox"]
+                        index = line["index"]
+                        page_line_list.append({"index": index, "bbox": bbox})
+            elif block["type"] in [BlockType.Image, BlockType.Table]:
+                for sub_block in block["blocks"]:
+                    if sub_block["type"] in [BlockType.ImageBody, BlockType.TableBody]:
+                        if len(sub_block["virtual_lines"]) > 0 and sub_block["virtual_lines"][0].get("index", None) is not None:
+                            for line in sub_block["virtual_lines"]:
+                                bbox = line["bbox"]
+                                index = line["index"]
+                                page_line_list.append({"index": index, "bbox": bbox})
                         else:
-                            for line in sub_block['lines']:
-                                bbox = line['bbox']
-                                index = line['index']
-                                page_line_list.append({'index': index, 'bbox': bbox})
-                    elif sub_block['type'] in [BlockType.ImageCaption, BlockType.TableCaption, BlockType.ImageFootnote, BlockType.TableFootnote]:
-                        for line in sub_block['lines']:
-                            bbox = line['bbox']
-                            index = line['index']
-                            page_line_list.append({'index': index, 'bbox': bbox})
-        sorted_bboxes = sorted(page_line_list, key=lambda x: x['index'])
-        layout_bbox_list.append(sorted_bbox['bbox'] for sorted_bbox in sorted_bboxes)
-    pdf_docs = fitz.open('pdf', pdf_bytes)
+                            for line in sub_block["lines"]:
+                                bbox = line["bbox"]
+                                index = line["index"]
+                                page_line_list.append({"index": index, "bbox": bbox})
+                    elif sub_block["type"] in [BlockType.ImageCaption, BlockType.TableCaption, BlockType.ImageFootnote, BlockType.TableFootnote]:
+                        for line in sub_block["lines"]:
+                            bbox = line["bbox"]
+                            index = line["index"]
+                            page_line_list.append({"index": index, "bbox": bbox})
+        sorted_bboxes = sorted(page_line_list, key=lambda x: x["index"])
+        layout_bbox_list.append(sorted_bbox["bbox"] for sorted_bbox in sorted_bboxes)
+    pdf_docs = fitz.open("pdf", pdf_bytes)
     for i, page in enumerate(pdf_docs):
         draw_bbox_with_number(i, layout_bbox_list, page, [255, 0, 0], False)
 
-    pdf_docs.save(f'{out_path}/{filename}')
+    pdf_docs.save(f"{out_path}/{filename}")
 
 
 def draw_char_bbox(pdf_bytes, out_path, filename):
-    pdf_docs = fitz.open('pdf', pdf_bytes)
+    pdf_docs = fitz.open("pdf", pdf_bytes)
     for i, page in enumerate(pdf_docs):
-        for block in page.get_text('rawdict', flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_MEDIABOX_CLIP)['blocks']:
-            for line in block['lines']:
-                for span in line['spans']:
-                    for char in span['chars']:
-                        char_bbox = char['bbox']
-                        page.draw_rect(char_bbox, color=[1, 0, 0], fill=None, fill_opacity=1, width=0.3, overlay=True,)
-    pdf_docs.save(f'{out_path}/{filename}')
+        for block in page.get_text("rawdict", flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_MEDIABOX_CLIP)["blocks"]:
+            for line in block["lines"]:
+                for span in line["spans"]:
+                    for char in span["chars"]:
+                        char_bbox = char["bbox"]
+                        page.draw_rect(
+                            char_bbox,
+                            color=[1, 0, 0],
+                            fill=None,
+                            fill_opacity=1,
+                            width=0.3,
+                            overlay=True,
+                        )
+    pdf_docs.save(f"{out_path}/{filename}")

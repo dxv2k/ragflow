@@ -45,28 +45,22 @@ class LayoutRecognizer(Recognizer):
 
     def __init__(self, domain):
         try:
-            model_dir = os.path.join(
-                get_project_base_directory(),
-                "rag/res/deepdoc")
+            model_dir = os.path.join(get_project_base_directory(), "rag/res/deepdoc")
             super().__init__(self.labels, domain, model_dir)
         except Exception:
-            model_dir = snapshot_download(repo_id="InfiniFlow/deepdoc",
-                                          local_dir=os.path.join(get_project_base_directory(), "rag/res/deepdoc"),
-                                          local_dir_use_symlinks=False)
+            model_dir = snapshot_download(repo_id="InfiniFlow/deepdoc", local_dir=os.path.join(get_project_base_directory(), "rag/res/deepdoc"), local_dir_use_symlinks=False)
             super().__init__(self.labels, domain, model_dir)
 
         self.garbage_layouts = ["footer", "header", "reference"]
         self.client = None
         if os.environ.get("TENSORRT_DLA_SVR"):
             from deepdoc.vision.dla_cli import DLAClient
+
             self.client = DLAClient(os.environ["TENSORRT_DLA_SVR"])
 
     def __call__(self, image_list, ocr_res, scale_factor=3, thr=0.2, batch_size=16, drop=True):
         def __is_garbage(b):
-            patt = [r"^•+$", "^[0-9]{1,2} / ?[0-9]{1,2}$",
-                    r"^[0-9]{1,2} of [0-9]{1,2}$", "^http://[^ ]{12,}",
-                    "\\(cid *: *[0-9]+ *\\)"
-                    ]
+            patt = [r"^•+$", "^[0-9]{1,2} / ?[0-9]{1,2}$", r"^[0-9]{1,2} of [0-9]{1,2}$", "^http://[^ ]{12,}", "\\(cid *: *[0-9]+ *\\)"]
             return any([re.search(p, b["text"]) for p in patt])
 
         if self.client:
@@ -82,14 +76,20 @@ class LayoutRecognizer(Recognizer):
         page_layout = []
         for pn, lts in enumerate(layouts):
             bxs = ocr_res[pn]
-            lts = [{"type": b["type"],
+            lts = [
+                {
+                    "type": b["type"],
                     "score": float(b["score"]),
-                    "x0": b["bbox"][0] / scale_factor, "x1": b["bbox"][2] / scale_factor,
-                    "top": b["bbox"][1] / scale_factor, "bottom": b["bbox"][-1] / scale_factor,
+                    "x0": b["bbox"][0] / scale_factor,
+                    "x1": b["bbox"][2] / scale_factor,
+                    "top": b["bbox"][1] / scale_factor,
+                    "bottom": b["bbox"][-1] / scale_factor,
                     "page_number": pn,
-                    } for b in lts if float(b["score"]) >= 0.4 or b["type"] not in self.garbage_layouts]
-            lts = self.sort_Y_firstly(lts, np.mean(
-                [lt["bottom"] - lt["top"] for lt in lts]) / 2)
+                }
+                for b in lts
+                if float(b["score"]) >= 0.4 or b["type"] not in self.garbage_layouts
+            ]
+            lts = self.sort_Y_firstly(lts, np.mean([lt["bottom"] - lt["top"] for lt in lts]) / 2)
             lts = self.layouts_cleanup(bxs, lts)
             page_layout.append(lts)
 
@@ -106,21 +106,17 @@ class LayoutRecognizer(Recognizer):
                         bxs.pop(i)
                         continue
 
-                    ii = self.find_overlapped_with_threashold(bxs[i], lts_,
-                                                              thr=0.4)
+                    ii = self.find_overlapped_with_threashold(bxs[i], lts_, thr=0.4)
                     if ii is None:  # belong to nothing
                         bxs[i]["layout_type"] = ""
                         i += 1
                         continue
                     lts_[ii]["visited"] = True
                     keep_feats = [
-                        lts_[
-                            ii]["type"] == "footer" and bxs[i]["bottom"] < image_list[pn].size[1] * 0.9 / scale_factor,
-                        lts_[
-                            ii]["type"] == "header" and bxs[i]["top"] > image_list[pn].size[1] * 0.1 / scale_factor,
+                        lts_[ii]["type"] == "footer" and bxs[i]["bottom"] < image_list[pn].size[1] * 0.9 / scale_factor,
+                        lts_[ii]["type"] == "header" and bxs[i]["top"] > image_list[pn].size[1] * 0.1 / scale_factor,
                     ]
-                    if drop and lts_[
-                            ii]["type"] in self.garbage_layouts and not any(keep_feats):
+                    if drop and lts_[ii]["type"] in self.garbage_layouts and not any(keep_feats):
                         if lts_[ii]["type"] not in garbages:
                             garbages[lts_[ii]["type"]] = []
                         garbages[lts_[ii]["type"]].append(bxs[i]["text"])
@@ -128,17 +124,14 @@ class LayoutRecognizer(Recognizer):
                         continue
 
                     bxs[i]["layoutno"] = f"{ty}-{ii}"
-                    bxs[i]["layout_type"] = lts_[ii]["type"] if lts_[
-                        ii]["type"] != "equation" else "figure"
+                    bxs[i]["layout_type"] = lts_[ii]["type"] if lts_[ii]["type"] != "equation" else "figure"
                     i += 1
 
-            for lt in ["footer", "header", "reference", "figure caption",
-                       "table caption", "title", "table", "text", "figure", "equation"]:
+            for lt in ["footer", "header", "reference", "figure caption", "table caption", "title", "table", "text", "figure", "equation"]:
                 findLayout(lt)
 
             # add box to figure layouts which has not text box
-            for i, lt in enumerate(
-                    [lt for lt in lts if lt["type"] in ["figure", "equation"]]):
+            for i, lt in enumerate([lt for lt in lts if lt["type"] in ["figure", "equation"]]):
                 if lt.get("visited"):
                     continue
                 lt = deepcopy(lt)
@@ -206,13 +199,11 @@ class LayoutRecognizer4YOLOv10(LayoutRecognizer):
             img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
             top, bottom = int(round(dh - 0.1)) if self.center else 0, int(round(dh + 0.1))
             left, right = int(round(dw - 0.1)) if self.center else 0, int(round(dw + 0.1))
-            img = cv2.copyMakeBorder(
-                img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
-            )  # add border
+            img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))  # add border
             img /= 255.0
             img = img.transpose(2, 0, 1)
             img = img[np.newaxis, :, :, :].astype(np.float32)
-            inputs.append({self.input_names[0]: img, "scale_factor": [shape[1]/ww, shape[0]/hh, dw, dh]})
+            inputs.append({self.input_names[0]: img, "scale_factor": [shape[1] / ww, shape[0] / hh, dw, dh]})
 
         return inputs
 
@@ -230,8 +221,7 @@ class LayoutRecognizer4YOLOv10(LayoutRecognizer):
         boxes[:, 2] -= inputs["scale_factor"][2]
         boxes[:, 1] -= inputs["scale_factor"][3]
         boxes[:, 3] -= inputs["scale_factor"][3]
-        input_shape = np.array([inputs["scale_factor"][0], inputs["scale_factor"][1], inputs["scale_factor"][0],
-                                inputs["scale_factor"][1]])
+        input_shape = np.array([inputs["scale_factor"][0], inputs["scale_factor"][1], inputs["scale_factor"][0], inputs["scale_factor"][1]])
         boxes = np.multiply(boxes, input_shape, dtype=np.float32)
 
         unique_class_ids = np.unique(class_ids)
@@ -243,8 +233,4 @@ class LayoutRecognizer4YOLOv10(LayoutRecognizer):
             class_keep_boxes = nms(class_boxes, class_scores, 0.45)
             indices.extend(class_indices[class_keep_boxes])
 
-        return [{
-            "type": self.label_list[class_ids[i]].lower(),
-            "bbox": [float(t) for t in boxes[i].tolist()],
-            "score": float(scores[i])
-        } for i in indices]
+        return [{"type": self.label_list[class_ids[i]].lower(), "bbox": [float(t) for t in boxes[i].tolist()], "score": float(scores[i])} for i in indices]

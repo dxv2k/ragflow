@@ -18,7 +18,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "📋 Summary of integration:"
     echo "   • ✅ Extracted MonkeyOCR dependencies from docker/requirements.txt"
-    echo "   • ✅ Merged dependencies into RAGFlow's pyproject.toml"  
+    echo "   • ✅ Merged dependencies into RAGFlow's pyproject.toml"
     echo "   • ✅ Fixed version conflicts (transformers==4.50.0, torch==2.5.1)"
     echo "   • ✅ Removed git submodule tracking from monkeyocr/"
     echo "   • ✅ Added monkeyocr/ files to main repository"

@@ -160,7 +160,7 @@ INSERT INTO Orders (CustomerID, OrderDate, TotalPrice) VALUES
 (10, '2024-08-10', 0);
 
 INSERT INTO OrderDetails (OrderID, ProductID, UnitPrice, Quantity, TotalPrice) VALUES
-(1, 1, (SELECT Price FROM Products WHERE ProductID = 1), 2, (SELECT Price * 2 FROM Products WHERE ProductID = 1)), 
+(1, 1, (SELECT Price FROM Products WHERE ProductID = 1), 2, (SELECT Price * 2 FROM Products WHERE ProductID = 1)),
 (1, 2, (SELECT Price FROM Products WHERE ProductID = 2), 1, (SELECT Price FROM Products WHERE ProductID = 2)),
 (2, 3, (SELECT Price FROM Products WHERE ProductID = 3), 3, (SELECT Price * 3 FROM Products WHERE ProductID = 3)),
 (2, 4, (SELECT Price FROM Products WHERE ProductID = 4), 1, (SELECT Price FROM Products WHERE ProductID = 4)),
@@ -272,7 +272,7 @@ CREATE TABLE OrderDetails (
 #### Configure DB_Description Knowledge Base
 
 1. the content of the DB_Description text is as follows:
-2. 
+2.
 ```markdown
 ### Customers (Customer Information Table)
 The Customers table records detailed information about different customers in the online store. Here is the meaning of each field within this table:
@@ -402,7 +402,7 @@ With this, you maybe appreciate the capabilities of Step Run. It undoubtedly ass
 
 ## Troubleshooting
 ### Total: 0 No record in the database!
-1. Confirm if the sql is correct. If so, check the connection information of the database. 
+1. Confirm if the sql is correct. If so, check the connection information of the database.
 2. If the connection information is correct, maybe there is actually no data matching your query in the database.
 
 ## Considerations

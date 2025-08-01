@@ -137,6 +137,7 @@ def test_list_agent_sessions_with_success(get_api_key_fixture):
     agent = rag.list_agents(id="2e45b5209c1011efa3e90242ac120006")[0]
     agent.list_sessions()
 
+
 @pytest.mark.skip(reason="")
 def test_delete_session_of_agent_with_success(get_api_key_fixture):
     API_KEY = "ragflow-BkOGNhYjIyN2JiODExZWY5MzVhMDI0Mm"

@@ -10,23 +10,21 @@ def ocr_cut_image_and_table(spans, page, page_id, pdf_bytes_md5, imageWriter):
         return join_path(pdf_bytes_md5, type)
 
     for span in spans:
-        span_type = span['type']
+        span_type = span["type"]
         if span_type == ContentType.Image:
-            if not check_img_bbox(span['bbox']) or not imageWriter:
+            if not check_img_bbox(span["bbox"]) or not imageWriter:
                 continue
-            span['image_path'] = cut_image(span['bbox'], page_id, page, return_path=return_path('images'),
-                                           imageWriter=imageWriter)
+            span["image_path"] = cut_image(span["bbox"], page_id, page, return_path=return_path("images"), imageWriter=imageWriter)
         elif span_type == ContentType.Table:
-            if not check_img_bbox(span['bbox']) or not imageWriter:
+            if not check_img_bbox(span["bbox"]) or not imageWriter:
                 continue
-            span['image_path'] = cut_image(span['bbox'], page_id, page, return_path=return_path('tables'),
-                                           imageWriter=imageWriter)
+            span["image_path"] = cut_image(span["bbox"], page_id, page, return_path=return_path("tables"), imageWriter=imageWriter)
 
     return spans
 
 
 def check_img_bbox(bbox) -> bool:
     if any([bbox[0] >= bbox[2], bbox[1] >= bbox[3]]):
-        logger.warning(f'image_bboxes: wrong box, {bbox}')
+        logger.warning(f"image_bboxes: wrong box, {bbox}")
         return False
     return True

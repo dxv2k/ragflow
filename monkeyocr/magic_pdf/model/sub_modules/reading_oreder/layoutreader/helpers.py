@@ -46,9 +46,7 @@ class DataCollator:
             bbox[i] = bbox[i] + [[0, 0, 0, 0]] * (max_len - len(bbox[i]))
             labels[i] = labels[i] + [-100] * (max_len - len(labels[i]))
             input_ids[i] = input_ids[i] + [EOS_TOKEN_ID] * (max_len - len(input_ids[i]))
-            attention_mask[i] = attention_mask[i] + [0] * (
-                max_len - len(attention_mask[i])
-            )
+            attention_mask[i] = attention_mask[i] + [0] * (max_len - len(attention_mask[i]))
 
         ret = {
             "bbox": torch.tensor(bbox),
@@ -74,9 +72,7 @@ def boxes2inputs(boxes: List[List[int]]) -> Dict[str, torch.Tensor]:
     }
 
 
-def prepare_inputs(
-    inputs: Dict[str, torch.Tensor], model: LayoutLMv3ForTokenClassification
-) -> Dict[str, torch.Tensor]:
+def prepare_inputs(inputs: Dict[str, torch.Tensor], model: LayoutLMv3ForTokenClassification) -> Dict[str, torch.Tensor]:
     ret = {}
     for k, v in inputs.items():
         v = v.to(model.device)
@@ -111,9 +107,7 @@ def parse_logits(logits: torch.Tensor, length: int) -> List[int]:
             idxes_to_logit = {}
             for idx in idxes:
                 idxes_to_logit[idx] = logits[idx, order]
-            idxes_to_logit = sorted(
-                idxes_to_logit.items(), key=lambda x: x[1], reverse=True
-            )
+            idxes_to_logit = sorted(idxes_to_logit.items(), key=lambda x: x[1], reverse=True)
             # keep the highest logit as order, set others to next candidate
             for idx, _ in idxes_to_logit[1:]:
                 ret[idx] = orders[idx].pop()

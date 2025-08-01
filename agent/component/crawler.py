@@ -29,9 +29,9 @@ class CrawlerParam(ComponentParamBase):
         super().__init__()
         self.proxy = None
         self.extract_type = "markdown"
-    
+
     def check(self):
-        self.check_valid_value(self.extract_type, "Type of content from the crawler", ['html', 'markdown', 'content'])
+        self.check_valid_value(self.extract_type, "Type of content from the crawler", ["html", "markdown", "content"])
 
 
 class Crawler(ComponentBase, ABC):
@@ -46,22 +46,19 @@ class Crawler(ComponentBase, ABC):
             result = asyncio.run(self.get_web(ans))
 
             return Crawler.be_output(result)
-            
+
         except Exception as e:
             return Crawler.be_output(f"An unexpected error occurred: {str(e)}")
 
     async def get_web(self, url):
         proxy = self._param.proxy if self._param.proxy else None
         async with AsyncWebCrawler(verbose=True, proxy=proxy) as crawler:
-            result = await crawler.arun(
-                url=url,
-                bypass_cache=True
-            )
-            
-            if self._param.extract_type == 'html':
+            result = await crawler.arun(url=url, bypass_cache=True)
+
+            if self._param.extract_type == "html":
                 return result.cleaned_html
-            elif self._param.extract_type == 'markdown':
+            elif self._param.extract_type == "markdown":
                 return result.markdown
-            elif self._param.extract_type == 'content':
+            elif self._param.extract_type == "content":
                 result.extracted_content
             return result.markdown

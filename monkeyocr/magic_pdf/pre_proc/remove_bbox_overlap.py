@@ -48,7 +48,7 @@ def _remove_overlap_between_bboxes(arr):
         for j in range(N):
             if i == j:
                 continue
-            if _is_in(arr[i]['bbox'], arr[j]['bbox']):
+            if _is_in(arr[i]["bbox"], arr[j]["bbox"]):
                 keeps[i] = False
 
     for idx, v in enumerate(arr):
@@ -58,14 +58,12 @@ def _remove_overlap_between_bboxes(arr):
             if res[i] is None:
                 continue
 
-            bbox1, bbox2, drop_reason = _remove_overlap_between_bbox(
-                v['bbox'], res[i]['bbox']
-            )
+            bbox1, bbox2, drop_reason = _remove_overlap_between_bbox(v["bbox"], res[i]["bbox"])
             if drop_reason is None:
-                v['bbox'] = bbox1
-                res[i]['bbox'] = bbox2
+                v["bbox"] = bbox1
+                res[i]["bbox"] = bbox2
             else:
-                if v['score'] > res[i]['score']:
+                if v["score"] > res[i]["score"]:
                     keeps[i] = False
                     res[i] = None
                 else:
@@ -77,24 +75,24 @@ def _remove_overlap_between_bboxes(arr):
 
 
 def remove_overlap_between_bbox_for_span(spans):
-    arr = [{'bbox': span['bbox'], 'score': span.get('score', 0.1)} for span in spans]
+    arr = [{"bbox": span["bbox"], "score": span.get("score", 0.1)} for span in spans]
     res, drop_reasons = _remove_overlap_between_bboxes(arr)
     ret = []
     for i in range(len(res)):
         if res[i] is None:
             continue
-        spans[i]['bbox'] = res[i]['bbox']
+        spans[i]["bbox"] = res[i]["bbox"]
         ret.append(spans[i])
     return ret, drop_reasons
 
 
 def remove_overlap_between_bbox_for_block(all_bboxes):
-    arr = [{'bbox': bbox[:4], 'score': bbox[-1]} for bbox in all_bboxes]
+    arr = [{"bbox": bbox[:4], "score": bbox[-1]} for bbox in all_bboxes]
     res, drop_reasons = _remove_overlap_between_bboxes(arr)
     ret = []
     for i in range(len(res)):
         if res[i] is None:
             continue
-        all_bboxes[i][:4] = res[i]['bbox']
+        all_bboxes[i][:4] = res[i]["bbox"]
         ret.append(all_bboxes[i])
     return ret, drop_reasons

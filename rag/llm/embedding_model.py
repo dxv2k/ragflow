@@ -57,7 +57,7 @@ class Base(ABC):
 
 
 class DefaultEmbedding(Base):
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     _model = None
     _model_name = ""
     _model_lock = threading.Lock()
@@ -78,19 +78,20 @@ class DefaultEmbedding(Base):
             with DefaultEmbedding._model_lock:
                 from FlagEmbedding import FlagModel
                 import torch
+
                 if not DefaultEmbedding._model or model_name != DefaultEmbedding._model_name:
                     try:
-                        DefaultEmbedding._model = FlagModel(os.path.join(get_home_cache_dir(), re.sub(r"^[a-zA-Z0-9]+/", "", model_name)),
-                                                            query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：",
-                                                            use_fp16=torch.cuda.is_available())
+                        DefaultEmbedding._model = FlagModel(
+                            os.path.join(get_home_cache_dir(), re.sub(r"^[a-zA-Z0-9]+/", "", model_name)),
+                            query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：",
+                            use_fp16=torch.cuda.is_available(),
+                        )
                         DefaultEmbedding._model_name = model_name
                     except Exception:
-                        model_dir = snapshot_download(repo_id="BAAI/bge-large-zh-v1.5",
-                                                      local_dir=os.path.join(get_home_cache_dir(), re.sub(r"^[a-zA-Z0-9]+/", "", model_name)),
-                                                      local_dir_use_symlinks=False)
-                        DefaultEmbedding._model = FlagModel(model_dir,
-                                                            query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：",
-                                                            use_fp16=torch.cuda.is_available())
+                        model_dir = snapshot_download(
+                            repo_id="BAAI/bge-large-zh-v1.5", local_dir=os.path.join(get_home_cache_dir(), re.sub(r"^[a-zA-Z0-9]+/", "", model_name)), local_dir_use_symlinks=False
+                        )
+                        DefaultEmbedding._model = FlagModel(model_dir, query_instruction_for_retrieval="为这个句子生成表示以用于检索相关文章：", use_fp16=torch.cuda.is_available())
         self._model = DefaultEmbedding._model
         self._model_name = DefaultEmbedding._model_name
 
@@ -102,7 +103,7 @@ class DefaultEmbedding(Base):
             token_count += num_tokens_from_string(t)
         ress = []
         for i in range(0, len(texts), batch_size):
-            ress.extend(self._model.encode(texts[i:i + batch_size]).tolist())
+            ress.extend(self._model.encode(texts[i : i + batch_size]).tolist())
         return np.array(ress), token_count
 
     def encode_queries(self, text: str):
@@ -111,8 +112,7 @@ class DefaultEmbedding(Base):
 
 
 class OpenAIEmbed(Base):
-    def __init__(self, key, model_name="text-embedding-ada-002",
-                 base_url="https://api.openai.com/v1"):
+    def __init__(self, key, model_name="text-embedding-ada-002", base_url="https://api.openai.com/v1"):
         if not base_url:
             base_url = "https://api.openai.com/v1"
         self.client = OpenAI(api_key=key, base_url=base_url)
@@ -125,15 +125,13 @@ class OpenAIEmbed(Base):
         ress = []
         total_tokens = 0
         for i in range(0, len(texts), batch_size):
-            res = self.client.embeddings.create(input=texts[i:i + batch_size],
-                                                model=self.model_name)
+            res = self.client.embeddings.create(input=texts[i : i + batch_size], model=self.model_name)
             ress.extend([d.embedding for d in res.data])
             total_tokens += self.total_token_count(res)
         return np.array(ress), total_tokens
 
     def encode_queries(self, text):
-        res = self.client.embeddings.create(input=[truncate(text, 8191)],
-                                            model=self.model_name)
+        res = self.client.embeddings.create(input=[truncate(text, 8191)], model=self.model_name)
         return np.array(res.data[0].embedding), self.total_token_count(res)
 
 
@@ -150,7 +148,7 @@ class LocalAIEmbed(Base):
         batch_size = 16
         ress = []
         for i in range(0, len(texts), batch_size):
-            res = self.client.embeddings.create(input=texts[i:i + batch_size], model=self.model_name)
+            res = self.client.embeddings.create(input=texts[i : i + batch_size], model=self.model_name)
             ress.extend([d.embedding for d in res.data])
         # local embedding for LmStudio donot count tokens
         return np.array(ress), 1024
@@ -163,16 +161,15 @@ class LocalAIEmbed(Base):
 class AzureEmbed(OpenAIEmbed):
     def __init__(self, key, model_name, **kwargs):
         from openai.lib.azure import AzureOpenAI
-        api_key = json.loads(key).get('api_key', '')
-        api_version = json.loads(key).get('api_version', '2024-02-01')
+
+        api_key = json.loads(key).get("api_key", "")
+        api_version = json.loads(key).get("api_version", "2024-02-01")
         self.client = AzureOpenAI(api_key=api_key, azure_endpoint=kwargs["base_url"], api_version=api_version)
         self.model_name = model_name
 
 
 class BaiChuanEmbed(OpenAIEmbed):
-    def __init__(self, key,
-                 model_name='Baichuan-Text-Embedding',
-                 base_url='https://api.baichuan-ai.com/v1'):
+    def __init__(self, key, model_name="Baichuan-Text-Embedding", base_url="https://api.baichuan-ai.com/v1"):
         if not base_url:
             base_url = "https://api.baichuan-ai.com/v1"
         super().__init__(key, model_name, base_url)
@@ -185,18 +182,14 @@ class QWenEmbed(Base):
 
     def encode(self, texts: list):
         import dashscope
+
         batch_size = 4
         try:
             res = []
             token_count = 0
             texts = [truncate(t, 2048) for t in texts]
             for i in range(0, len(texts), batch_size):
-                resp = dashscope.TextEmbedding.call(
-                    model=self.model_name,
-                    input=texts[i:i + batch_size],
-                    api_key=self.key,
-                    text_type="document"
-                )
+                resp = dashscope.TextEmbedding.call(model=self.model_name, input=texts[i : i + batch_size], api_key=self.key, text_type="document")
                 embds = [[] for _ in range(len(resp["output"]["embeddings"]))]
                 for e in resp["output"]["embeddings"]:
                     embds[e["text_index"]] = e["embedding"]
@@ -204,21 +197,15 @@ class QWenEmbed(Base):
                 token_count += self.total_token_count(resp)
             return np.array(res), token_count
         except Exception as e:
-            raise Exception("Account abnormal. Please ensure it's on good standing to use QWen's "+self.model_name)
+            raise Exception("Account abnormal. Please ensure it's on good standing to use QWen's " + self.model_name)
         return np.array([]), 0
 
     def encode_queries(self, text):
         try:
-            resp = dashscope.TextEmbedding.call(
-                model=self.model_name,
-                input=text[:2048],
-                api_key=self.key,
-                text_type="query"
-            )
-            return np.array(resp["output"]["embeddings"][0]
-                            ["embedding"]), self.total_token_count(resp)
+            resp = dashscope.TextEmbedding.call(model=self.model_name, input=text[:2048], api_key=self.key, text_type="query")
+            return np.array(resp["output"]["embeddings"][0]["embedding"]), self.total_token_count(resp)
         except Exception:
-            raise Exception("Account abnormal. Please ensure it's on good standing to use QWen's "+self.model_name)
+            raise Exception("Account abnormal. Please ensure it's on good standing to use QWen's " + self.model_name)
         return np.array([]), 0
 
 
@@ -239,64 +226,56 @@ class ZhipuEmbed(Base):
             texts = [truncate(t, MAX_LEN) for t in texts]
 
         for txt in texts:
-            res = self.client.embeddings.create(input=txt,
-                                                model=self.model_name)
+            res = self.client.embeddings.create(input=txt, model=self.model_name)
             arr.append(res.data[0].embedding)
             tks_num += self.total_token_count(res)
         return np.array(arr), tks_num
 
     def encode_queries(self, text):
-        res = self.client.embeddings.create(input=text,
-                                            model=self.model_name)
+        res = self.client.embeddings.create(input=text, model=self.model_name)
         return np.array(res.data[0].embedding), self.total_token_count(res)
 
 
 class OllamaEmbed(Base):
     def __init__(self, key, model_name, **kwargs):
-        self.client = Client(host=kwargs["base_url"]) if not key or key == "x" else \
-            Client(host=kwargs["base_url"], headers={"Authorization": f"Bear {key}"})
+        self.client = Client(host=kwargs["base_url"]) if not key or key == "x" else Client(host=kwargs["base_url"], headers={"Authorization": f"Bear {key}"})
         self.model_name = model_name
 
     def encode(self, texts: list):
         arr = []
         tks_num = 0
         for txt in texts:
-            res = self.client.embeddings(prompt=txt,
-                                         model=self.model_name,
-                                         options={"use_mmap": True})
+            res = self.client.embeddings(prompt=txt, model=self.model_name, options={"use_mmap": True})
             arr.append(res["embedding"])
             tks_num += 128
         return np.array(arr), tks_num
 
     def encode_queries(self, text):
-        res = self.client.embeddings(prompt=text,
-                                     model=self.model_name,
-                                     options={"use_mmap": True})
+        res = self.client.embeddings(prompt=text, model=self.model_name, options={"use_mmap": True})
         return np.array(res["embedding"]), 128
 
 
 class FastEmbed(DefaultEmbedding):
-    
     def __init__(
-            self,
-            key: str | None = None,
-            model_name: str = "BAAI/bge-small-en-v1.5",
-            cache_dir: str | None = None,
-            threads: int | None = None,
-            **kwargs,
+        self,
+        key: str | None = None,
+        model_name: str = "BAAI/bge-small-en-v1.5",
+        cache_dir: str | None = None,
+        threads: int | None = None,
+        **kwargs,
     ):
         if not settings.LIGHTEN:
             with FastEmbed._model_lock:
                 from fastembed import TextEmbedding
+
                 if not DefaultEmbedding._model or model_name != DefaultEmbedding._model_name:
                     try:
                         DefaultEmbedding._model = TextEmbedding(model_name, cache_dir, threads, **kwargs)
                         DefaultEmbedding._model_name = model_name
                     except Exception:
-                        cache_dir = snapshot_download(repo_id="BAAI/bge-small-en-v1.5",
-                                                      local_dir=os.path.join(get_home_cache_dir(),
-                                                                             re.sub(r"^[a-zA-Z0-9]+/", "", model_name)),
-                                                      local_dir_use_symlinks=False)
+                        cache_dir = snapshot_download(
+                            repo_id="BAAI/bge-small-en-v1.5", local_dir=os.path.join(get_home_cache_dir(), re.sub(r"^[a-zA-Z0-9]+/", "", model_name)), local_dir_use_symlinks=False
+                        )
                         DefaultEmbedding._model = TextEmbedding(model_name, cache_dir, threads, **kwargs)
         self._model = DefaultEmbedding._model
         self._model_name = model_name
@@ -332,14 +311,13 @@ class XinferenceEmbed(Base):
         ress = []
         total_tokens = 0
         for i in range(0, len(texts), batch_size):
-            res = self.client.embeddings.create(input=texts[i:i + batch_size], model=self.model_name)
+            res = self.client.embeddings.create(input=texts[i : i + batch_size], model=self.model_name)
             ress.extend([d.embedding for d in res.data])
             total_tokens += self.total_token_count(res)
         return np.array(ress), total_tokens
 
     def encode_queries(self, text):
-        res = self.client.embeddings.create(input=[text],
-                                            model=self.model_name)
+        res = self.client.embeddings.create(input=[text], model=self.model_name)
         return np.array(res.data[0].embedding), self.total_token_count(res)
 
 
@@ -349,15 +327,12 @@ class YoudaoEmbed(Base):
     def __init__(self, key=None, model_name="maidalun1020/bce-embedding-base_v1", **kwargs):
         if not settings.LIGHTEN and not YoudaoEmbed._client:
             from BCEmbedding import EmbeddingModel as qanthing
+
             try:
                 logging.info("LOADING BCE...")
-                YoudaoEmbed._client = qanthing(model_name_or_path=os.path.join(
-                    get_home_cache_dir(),
-                    "bce-embedding-base_v1"))
+                YoudaoEmbed._client = qanthing(model_name_or_path=os.path.join(get_home_cache_dir(), "bce-embedding-base_v1"))
             except Exception:
-                YoudaoEmbed._client = qanthing(
-                    model_name_or_path=model_name.replace(
-                        "maidalun1020", "InfiniFlow"))
+                YoudaoEmbed._client = qanthing(model_name_or_path=model_name.replace("maidalun1020", "InfiniFlow"))
 
     def encode(self, texts: list):
         batch_size = 10
@@ -366,7 +341,7 @@ class YoudaoEmbed(Base):
         for t in texts:
             token_count += num_tokens_from_string(t)
         for i in range(0, len(texts), batch_size):
-            embds = YoudaoEmbed._client.encode(texts[i:i + batch_size])
+            embds = YoudaoEmbed._client.encode(texts[i : i + batch_size])
             res.extend(embds)
         return np.array(res), token_count
 
@@ -376,14 +351,9 @@ class YoudaoEmbed(Base):
 
 
 class JinaEmbed(Base):
-    def __init__(self, key, model_name="jina-embeddings-v3",
-                 base_url="https://api.jina.ai/v1/embeddings"):
-
+    def __init__(self, key, model_name="jina-embeddings-v3", base_url="https://api.jina.ai/v1/embeddings"):
         self.base_url = "https://api.jina.ai/v1/embeddings"
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {key}"
-        }
+        self.headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
         self.model_name = model_name
 
     def encode(self, texts: list):
@@ -392,11 +362,7 @@ class JinaEmbed(Base):
         ress = []
         token_count = 0
         for i in range(0, len(texts), batch_size):
-            data = {
-                "model": self.model_name,
-                "input": texts[i:i + batch_size],
-                'encoding_type': 'float'
-            }
+            data = {"model": self.model_name, "input": texts[i : i + batch_size], "encoding_type": "float"}
             res = requests.post(self.base_url, headers=self.headers, json=data).json()
             ress.extend([d["embedding"] for d in res["data"]])
             token_count += self.total_token_count(res)
@@ -411,17 +377,16 @@ class InfinityEmbed(Base):
     _model = None
 
     def __init__(
-            self,
-            model_names: list[str] = ("BAAI/bge-small-en-v1.5",),
-            engine_kwargs: dict = {},
-            key = None,
+        self,
+        model_names: list[str] = ("BAAI/bge-small-en-v1.5",),
+        engine_kwargs: dict = {},
+        key=None,
     ):
-
         from infinity_emb import EngineArgs
         from infinity_emb.engine import AsyncEngineArray
 
         self._default_model = model_names[0]
-        self.engine_array = AsyncEngineArray.from_args([EngineArgs(model_name_or_path = model_name, **engine_kwargs) for model_name in model_names])
+        self.engine_array = AsyncEngineArray.from_args([EngineArgs(model_name_or_path=model_name, **engine_kwargs) for model_name in model_names])
 
     async def _embed(self, sentences: list[str], model_name: str = ""):
         if not model_name:
@@ -448,9 +413,9 @@ class InfinityEmbed(Base):
 
 
 class MistralEmbed(Base):
-    def __init__(self, key, model_name="mistral-embed",
-                 base_url=None):
+    def __init__(self, key, model_name="mistral-embed", base_url=None):
         from mistralai.client import MistralClient
+
         self.client = MistralClient(api_key=key)
         self.model_name = model_name
 
@@ -460,43 +425,40 @@ class MistralEmbed(Base):
         ress = []
         token_count = 0
         for i in range(0, len(texts), batch_size):
-            res = self.client.embeddings(input=texts[i:i + batch_size],
-                                        model=self.model_name)
+            res = self.client.embeddings(input=texts[i : i + batch_size], model=self.model_name)
             ress.extend([d.embedding for d in res.data])
             token_count += self.total_token_count(res)
         return np.array(ress), token_count
 
     def encode_queries(self, text):
-        res = self.client.embeddings(input=[truncate(text, 8196)],
-                                            model=self.model_name)
+        res = self.client.embeddings(input=[truncate(text, 8196)], model=self.model_name)
         return np.array(res.data[0].embedding), self.total_token_count(res)
 
 
 class BedrockEmbed(Base):
-    def __init__(self, key, model_name,
-                 **kwargs):
+    def __init__(self, key, model_name, **kwargs):
         import boto3
-        self.bedrock_ak = json.loads(key).get('bedrock_ak', '')
-        self.bedrock_sk = json.loads(key).get('bedrock_sk', '')
-        self.bedrock_region = json.loads(key).get('bedrock_region', '')
+
+        self.bedrock_ak = json.loads(key).get("bedrock_ak", "")
+        self.bedrock_sk = json.loads(key).get("bedrock_sk", "")
+        self.bedrock_region = json.loads(key).get("bedrock_region", "")
         self.model_name = model_name
-        
-        if self.bedrock_ak == '' or self.bedrock_sk == '' or self.bedrock_region == '':
+
+        if self.bedrock_ak == "" or self.bedrock_sk == "" or self.bedrock_region == "":
             # Try to create a client using the default credentials (AWS_PROFILE, AWS_DEFAULT_REGION, etc.)
-            self.client = boto3.client('bedrock-runtime')
+            self.client = boto3.client("bedrock-runtime")
         else:
-            self.client = boto3.client(service_name='bedrock-runtime', region_name=self.bedrock_region,
-                                    aws_access_key_id=self.bedrock_ak, aws_secret_access_key=self.bedrock_sk)
+            self.client = boto3.client(service_name="bedrock-runtime", region_name=self.bedrock_region, aws_access_key_id=self.bedrock_ak, aws_secret_access_key=self.bedrock_sk)
 
     def encode(self, texts: list):
         texts = [truncate(t, 8196) for t in texts]
         embeddings = []
         token_count = 0
         for text in texts:
-            if self.model_name.split('.')[0] == 'amazon':
+            if self.model_name.split(".")[0] == "amazon":
                 body = {"inputText": text}
-            elif self.model_name.split('.')[0] == 'cohere':
-                body = {"texts": [text], "input_type": 'search_document'}
+            elif self.model_name.split(".")[0] == "cohere":
+                body = {"texts": [text], "input_type": "search_document"}
 
             response = self.client.invoke_model(modelId=self.model_name, body=json.dumps(body))
             model_response = json.loads(response["body"].read())
@@ -508,10 +470,10 @@ class BedrockEmbed(Base):
     def encode_queries(self, text):
         embeddings = []
         token_count = num_tokens_from_string(text)
-        if self.model_name.split('.')[0] == 'amazon':
+        if self.model_name.split(".")[0] == "amazon":
             body = {"inputText": truncate(text, 8196)}
-        elif self.model_name.split('.')[0] == 'cohere':
-            body = {"texts": [truncate(text, 8196)], "input_type": 'search_query'}
+        elif self.model_name.split(".")[0] == "cohere":
+            body = {"texts": [truncate(text, 8196)], "input_type": "search_query"}
 
         response = self.client.invoke_model(modelId=self.model_name, body=json.dumps(body))
         model_response = json.loads(response["body"].read())
@@ -521,11 +483,10 @@ class BedrockEmbed(Base):
 
 
 class GeminiEmbed(Base):
-    def __init__(self, key, model_name='models/text-embedding-004',
-                 **kwargs):
+    def __init__(self, key, model_name="models/text-embedding-004", **kwargs):
         self.key = key
-        self.model_name = 'models/' + model_name
-        
+        self.model_name = "models/" + model_name
+
     def encode(self, texts: list):
         texts = [truncate(t, 2048) for t in texts]
         token_count = sum(num_tokens_from_string(text) for text in texts)
@@ -533,29 +494,19 @@ class GeminiEmbed(Base):
         batch_size = 16
         ress = []
         for i in range(0, len(texts), batch_size):
-            result = genai.embed_content(
-                model=self.model_name,
-                content=texts[i: i + batch_size],
-                task_type="retrieval_document",
-                title="Embedding of single string")
-            ress.extend(result['embedding'])
-        return np.array(ress),token_count
-    
+            result = genai.embed_content(model=self.model_name, content=texts[i : i + batch_size], task_type="retrieval_document", title="Embedding of single string")
+            ress.extend(result["embedding"])
+        return np.array(ress), token_count
+
     def encode_queries(self, text):
         genai.configure(api_key=self.key)
-        result = genai.embed_content(
-            model=self.model_name,
-            content=truncate(text,2048),
-            task_type="retrieval_document",
-            title="Embedding of single string")
+        result = genai.embed_content(model=self.model_name, content=truncate(text, 2048), task_type="retrieval_document", title="Embedding of single string")
         token_count = num_tokens_from_string(text)
-        return np.array(result['embedding']), token_count
+        return np.array(result["embedding"]), token_count
 
 
 class NvidiaEmbed(Base):
-    def __init__(
-        self, key, model_name, base_url="https://integrate.api.nvidia.com/v1/embeddings"
-    ):
+    def __init__(self, key, model_name, base_url="https://integrate.api.nvidia.com/v1/embeddings"):
         if not base_url:
             base_url = "https://integrate.api.nvidia.com/v1/embeddings"
         self.api_key = key
@@ -643,9 +594,7 @@ class CoHereEmbed(Base):
             input_type="search_query",
             embedding_types=["float"],
         )
-        return np.array(res.embeddings.float[0]), int(
-            res.meta.billed_units.input_tokens
-        )
+        return np.array(res.embeddings.float[0]), int(res.meta.billed_units.input_tokens)
 
 
 class TogetherAIEmbed(OpenAIEmbed):
@@ -670,9 +619,7 @@ class UpstageEmbed(OpenAIEmbed):
 
 
 class SILICONFLOWEmbed(Base):
-    def __init__(
-        self, key, model_name, base_url="https://api.siliconflow.cn/v1/embeddings"
-    ):
+    def __init__(self, key, model_name, base_url="https://api.siliconflow.cn/v1/embeddings"):
         if not base_url:
             base_url = "https://api.siliconflow.cn/v1/embeddings"
         self.headers = {
@@ -708,7 +655,7 @@ class SILICONFLOWEmbed(Base):
             "encoding_format": "float",
         }
         res = requests.post(self.base_url, json=payload, headers=self.headers).json()
-        if "data" not in res or not isinstance(res["data"], list) or len(res["data"])!= 1:
+        if "data" not in res or not isinstance(res["data"], list) or len(res["data"]) != 1:
             raise ValueError(f"SILICONFLOWEmbed.encode_queries got invalid response from {self.base_url}")
         return np.array(res["data"][0]["embedding"]), self.total_token_count(res)
 
@@ -771,17 +718,13 @@ class VoyageEmbed(Base):
         ress = []
         token_count = 0
         for i in range(0, len(texts), batch_size):
-            res = self.client.embed(
-                texts=texts[i : i + batch_size], model=self.model_name, input_type="document"
-            )
+            res = self.client.embed(texts=texts[i : i + batch_size], model=self.model_name, input_type="document")
             ress.extend(res.embeddings)
             token_count += res.total_tokens
         return np.array(ress), token_count
 
     def encode_queries(self, text):
-        res = self.client.embed(
-            texts=text, model=self.model_name, input_type="query"
-            )
+        res = self.client.embed(texts=text, model=self.model_name, input_type="query")
         return np.array(res.embeddings)[0], res.total_tokens
 
 
@@ -796,11 +739,7 @@ class HuggingFaceEmbed(Base):
     def encode(self, texts: list):
         embeddings = []
         for text in texts:
-            response = requests.post(
-                f"{self.base_url}/embed",
-                json={"inputs": text},
-                headers={'Content-Type': 'application/json'}
-            )
+            response = requests.post(f"{self.base_url}/embed", json={"inputs": text}, headers={"Content-Type": "application/json"})
             if response.status_code == 200:
                 embedding = response.json()
                 embeddings.append(embedding[0])
@@ -809,11 +748,7 @@ class HuggingFaceEmbed(Base):
         return np.array(embeddings), sum([num_tokens_from_string(text) for text in texts])
 
     def encode_queries(self, text):
-        response = requests.post(
-            f"{self.base_url}/embed",
-            json={"inputs": text},
-            headers={'Content-Type': 'application/json'}
-        )
+        response = requests.post(f"{self.base_url}/embed", json={"inputs": text}, headers={"Content-Type": "application/json"})
         if response.status_code == 200:
             embedding = response.json()
             return np.array(embedding[0]), num_tokens_from_string(text)
@@ -825,9 +760,10 @@ class VolcEngineEmbed(OpenAIEmbed):
     def __init__(self, key, model_name, base_url="https://ark.cn-beijing.volces.com/api/v3"):
         if not base_url:
             base_url = "https://ark.cn-beijing.volces.com/api/v3"
-        ark_api_key = json.loads(key).get('ark_api_key', '')
-        model_name = json.loads(key).get('ep_id', '') + json.loads(key).get('endpoint_id', '')
-        super().__init__(ark_api_key,model_name,base_url)
+        ark_api_key = json.loads(key).get("ark_api_key", "")
+        model_name = json.loads(key).get("ep_id", "") + json.loads(key).get("endpoint_id", "")
+        super().__init__(ark_api_key, model_name, base_url)
+
 
 class GPUStackEmbed(OpenAIEmbed):
     def __init__(self, key, model_name, base_url):

@@ -4,7 +4,7 @@
 
 ### 📋 Summary
 - **New Files**: 3
-- **Modified Files**: 6  
+- **Modified Files**: 6
 - **MonkeyOCR Source**: 1 folder (contains entire MonkeyOCR codebase)
 - **Total Files**: 9 + MonkeyOCR source code
 
@@ -19,20 +19,20 @@ graph TB
     subgraph "External Application"
         ExtApp["External App<br/>(Python SDK)"]
     end
-    
+
     subgraph "RAGFlow API Layer"
         API["RAGFlow API<br/>/api/v1/datasets"]
         Auth["Authentication"]
         Validation["Request Validation"]
     end
-    
+
     subgraph "RAGFlow Service Layer"
         DatasetSvc["Dataset Service<br/>create_dataset()"]
         DocumentSvc["Document Service<br/>upload_documents()"]
         TaskSvc["Task Service<br/>parse_documents()"]
         FileSvc["File Service<br/>get_parser()"]
     end
-    
+
     subgraph "Parser Factory"
         ParserFactory["Parser Factory<br/>FACTORY dict"]
         MonkeyParser["MonkeyOCR Parser<br/>monkey_ocr_parser.py"]
@@ -40,7 +40,7 @@ graph TB
         PictureParser["Picture Parser"]
         OtherParsers["Other Parsers..."]
     end
-    
+
     subgraph "MonkeyOCR Integration"
         MonkeyMgr["MonkeyOCR Manager<br/>(Per-task lifecycle)"]
         ModelLoader["Dynamic Model Loader<br/>(Load → Process → Unload)"]
@@ -48,18 +48,18 @@ graph TB
         ResultProcessor["Result Processor<br/>(Format Converter)"]
         MemoryMgr["Memory Manager<br/>(Auto cleanup)"]
     end
-    
+
     subgraph "Storage & Knowledge Base"
         FileStorage["File Storage<br/>(Binary Files)"]
         ChunkStorage["Chunk Storage<br/>(Elasticsearch)"]
         KnowledgeBase["Knowledge Base<br/>(Processed Chunks)"]
     end
-    
+
     subgraph "Configuration"
         Config["monkey_ocr_config.json"]
         Settings["api/settings.py<br/>MONKEY_OCR_CONFIG"]
     end
-    
+
     %% Flow connections
     ExtApp --> API
     API --> Auth
@@ -69,32 +69,32 @@ graph TB
     DocumentSvc --> TaskSvc
     TaskSvc --> FileSvc
     FileSvc --> ParserFactory
-    
+
     ParserFactory --> MonkeyParser
     ParserFactory --> NaiveParser
     ParserFactory --> PictureParser
     ParserFactory --> OtherParsers
-    
+
     MonkeyParser --> MonkeyMgr
     MonkeyMgr --> ModelLoader
     ModelLoader --> MonkeyModel
     MonkeyModel --> ResultProcessor
     ResultProcessor --> MemoryMgr
     MemoryMgr --> ModelLoader
-    
+
     ResultProcessor --> ChunkStorage
     ChunkStorage --> KnowledgeBase
-    
+
     DocumentSvc --> FileStorage
-    
+
     Config --> Settings
     Settings --> MonkeyMgr
-    
+
     %% Styling
     classDef newComponent fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
     classDef modifiedComponent fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
     classDef existingComponent fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    
+
     class MonkeyParser,MonkeyMgr,ModelLoader,MonkeyModel,ResultProcessor,MemoryMgr,Config newComponent
     class ParserFactory,FileSvc,Settings modifiedComponent
     class ExtApp,API,Auth,Validation,DatasetSvc,DocumentSvc,TaskSvc,FileStorage,ChunkStorage,KnowledgeBase,NaiveParser,PictureParser,OtherParsers existingComponent
@@ -140,31 +140,31 @@ sequenceDiagram
     TaskSvc->>TaskSvc: Create parsing tasks
     TaskSvc->>+Factory: Get parser for "monkey_ocr"
     Factory->>+MonkeyParser: chunk(filename, binary, **kwargs)
-    
+
     MonkeyParser->>MonkeyParser: callback(0.1, "Initializing MonkeyOCR...")
     MonkeyParser->>+MonkeyMgr: process_document(file_path, config)
-    
+
     Note over MonkeyMgr: Load model on demand for each task
     MonkeyMgr->>MonkeyMgr: load_model()
     MonkeyMgr->>+MonkeyModel: Initialize MonkeyOCR()
     MonkeyModel->>-MonkeyMgr: Model loaded
-    
+
     MonkeyMgr->>+MonkeyModel: parse(file_path, config)
     MonkeyModel->>MonkeyModel: Process document<br/>- Structure Recognition<br/>- Content Recognition<br/>- Relationship Prediction
     MonkeyModel->>-MonkeyMgr: Raw result (markdown + structure)
-    
+
     Note over MonkeyMgr: Unload model to free memory
     MonkeyMgr->>MonkeyMgr: unload_model()
     MonkeyMgr->>MonkeyModel: Release model resources
     MonkeyModel->>MonkeyMgr: Memory freed
-    
+
     MonkeyMgr->>-MonkeyParser: Processed result
-    
+
     MonkeyParser->>MonkeyParser: callback(0.8, "Formatting results...")
     MonkeyParser->>MonkeyParser: Convert to RAGFlow format<br/>- Create doc object<br/>- Tokenize markdown<br/>- Add structure info
     MonkeyParser->>-Factory: Chunks array
     Factory->>-TaskSvc: Parsed chunks
-    
+
     TaskSvc->>+Storage: Store chunks
     Storage->>-TaskSvc: Chunks stored
     TaskSvc->>+KB: Update knowledge base
@@ -192,21 +192,21 @@ graph TD
             P1F1["📄 api/db/__init__.py<br/>✏️ MODIFY<br/>+ MONKEY_OCR = \"monkey_ocr\""]
             P1F2["📄 api/db/init_data.py<br/>✏️ MODIFY<br/>+ monkey_ocr:MonkeyOCR"]
         end
-        
+
         subgraph "Phase 2: Parser Implementation"
             P2F1["📄 rag/app/monkey_ocr_parser.py<br/>🆕 NEW<br/>• MonkeyOCRManager class<br/>• chunk() function<br/>• Lazy loading logic"]
             P2F2["📄 rag/app/__init__.py<br/>✏️ MODIFY<br/>+ from .monkey_ocr_parser import chunk<br/>+ FACTORY[MONKEY_OCR] = monkey_ocr_chunk"]
         end
-        
+
         subgraph "Phase 3: File Service"
             P3F1["📄 api/db/services/file_service.py<br/>✏️ MODIFY<br/>+ get_parser() logic for MonkeyOCR"]
         end
-        
+
         subgraph "Phase 4: Configuration"
             P4F1["📄 conf/monkey_ocr_config.json<br/>🆕 NEW<br/>• Model variants<br/>• Default settings<br/>• File size limits"]
             P4F2["📄 api/settings.py<br/>✏️ MODIFY<br/>+ MONKEY_OCR_CONFIG"]
         end
-        
+
         subgraph "Dependencies & Source"
             DEP1["📁 monkeyocr/<br/>Local MonkeyOCR source code"]
             DEP2["📦 PyTorch >= 2.0.0"]
@@ -215,21 +215,21 @@ graph TD
             DEP5["📦 OpenCV >= 4.5.0"]
         end
     end
-    
+
     %% Dependencies between phases
     P1F1 --> P2F2
     P1F1 --> P3F1
     P2F1 --> P2F2
     P4F1 --> P4F2
     P4F2 --> P2F1
-    
+
     %% External dependencies
     DEP1 --> P2F1
     DEP2 --> P2F1
     DEP3 --> P2F1
     DEP4 --> P2F1
     DEP5 --> P2F1
-    
+
     %% Implementation order
     P1F1 -.->|"Step 1"| P1F2
     P1F2 -.->|"Step 2"| P2F1
@@ -237,13 +237,13 @@ graph TD
     P2F2 -.->|"Step 4"| P3F1
     P3F1 -.->|"Step 5"| P4F1
     P4F1 -.->|"Step 6"| P4F2
-    
+
     %% Styling
     classDef newFile fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
     classDef modFile fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
     classDef depFile fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef orderFlow stroke:#1976d2,stroke-width:2px,stroke-dasharray: 5 5
-    
+
     class P2F1,P4F1 newFile
     class P1F1,P1F2,P2F2,P3F1,P4F2 modFile
     class DEP1,DEP2,DEP3,DEP4,DEP5 depFile
@@ -384,7 +384,7 @@ class MonkeyOCR:
     MonkeyOCR class following deepdoc/vision pattern.
     Integrates with RAGFlow's vision module architecture.
     """
-    
+
     def __init__(self, model_dir=None):
         """
         Initialize MonkeyOCR with on-demand loading.
@@ -393,7 +393,7 @@ class MonkeyOCR:
         self.model = None
         self.model_dir = model_dir
         self.config = getattr(settings, 'MONKEY_OCR_CONFIG', {})
-    
+
     def load_model(self):
         """
         Load MonkeyOCR model for current task.
@@ -404,7 +404,7 @@ class MonkeyOCR:
             # Import from local MonkeyOCR source code
             from monkeyocr.magic_pdf.pipe.UNIPipe import UNIPipe
             from monkeyocr.magic_pdf.pipe.OCRPipe import OCRPipe
-            
+
             # Initialize MonkeyOCR pipeline
             self.model = UNIPipe(
                 pdf_res_path=self.model_dir,
@@ -414,7 +414,7 @@ class MonkeyOCR:
         except Exception as e:
             logger.error(f"Failed to load MonkeyOCR model: {e}")
             raise
-    
+
     def unload_model(self):
         """
         Unload MonkeyOCR model to free memory.
@@ -426,36 +426,36 @@ class MonkeyOCR:
                 # Clean up model resources
                 if hasattr(self.model, 'cleanup'):
                     self.model.cleanup()
-                
+
                 # Clear model reference
                 self.model = None
-                
+
                 # Force garbage collection to free memory
                 import gc
                 gc.collect()
-                
+
                 logger.info("MonkeyOCR model unloaded successfully")
         except Exception as e:
             logger.warning(f"Error during model unloading: {e}")
             # Set to None anyway to prevent further usage
             self.model = None
-    
+
     def __call__(self, img_path, config=None):
         """
         Process image/document using MonkeyOCR.
         Follows the same pattern as existing OCR class.
         Implements load → process → unload cycle for memory efficiency.
-        
+
         Args:
             img_path (str): Path to the image/document file
             config (dict): Processing configuration options
-            
+
         Returns:
             list: List of (bbox, (text, confidence)) tuples
         """
         # Load model for this task
         self.load_model()
-        
+
         try:
             # Process with MonkeyOCR
             if isinstance(img_path, str):
@@ -467,7 +467,7 @@ class MonkeyOCR:
                     Image.fromarray(img_path).save(tmp.name)
                     result = self.model.pipe_analyze(tmp.name)
                     os.unlink(tmp.name)
-            
+
             # Convert to RAGFlow OCR format: list of (bbox, (text, confidence))
             ocr_results = []
             if result.get('layout_dets'):
@@ -475,7 +475,7 @@ class MonkeyOCR:
                     bbox = detection.get('bbox', [0, 0, 0, 0])
                     text = detection.get('text', '')
                     confidence = detection.get('score', 1.0)
-                    
+
                     # Convert bbox format if needed
                     if len(bbox) == 4:
                         # Convert to format expected by RAGFlow
@@ -486,45 +486,45 @@ class MonkeyOCR:
                             [bbox[0], bbox[3]]   # bottom-left
                         ])
                         ocr_results.append((bbox_coords, (text, confidence)))
-            
+
             return ocr_results
-            
+
         except Exception as e:
             logger.error(f"MonkeyOCR processing failed: {e}")
             return []
         finally:
             # Always unload model to free memory
             self.unload_model()
-    
+
     def get_markdown_result(self, file_path, config=None):
         """
         Get markdown formatted result from MonkeyOCR.
         Additional method for structured output.
         Implements load → process → unload cycle for memory efficiency.
-        
+
         Args:
             file_path (str): Path to the document file
             config (dict): Processing configuration
-            
+
         Returns:
             dict: Result with markdown content and structure info
         """
         # Load model for this task
         self.load_model()
-        
+
         try:
             result = self.model.pipe_analyze(file_path)
-            
+
             # Extract markdown and structure information
             markdown_content = result.get('content_list', [])
             structure_info = result.get('layout_dets', [])
-            
+
             return {
                 'markdown': '\n'.join(markdown_content) if markdown_content else '',
                 'structure': structure_info,
                 'metadata': result.get('metadata', {})
             }
-            
+
         except Exception as e:
             logger.error(f"MonkeyOCR markdown extraction failed: {e}")
             return {'markdown': '', 'structure': [], 'metadata': {}}
@@ -558,7 +558,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
     """
     Parse document using MonkeyOCR for knowledge base creation.
     Supports PDF and image files with advanced structure recognition.
-    
+
     Args:
         filename (str): Name of the file being processed
         binary (bytes): File binary content
@@ -567,40 +567,40 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
         lang (str): Document language
         callback (function): Progress callback function
         **kwargs: Additional configuration options
-        
+
     Returns:
         list: Array of document chunks in RAGFlow format
     """
     def safe_callback(progress, message):
         if callback:
             callback(progress, message)
-    
+
     safe_callback(0.1, "Initializing MonkeyOCR...")
-    
+
     # Initialize MonkeyOCR from deepdoc.vision
     monkey_ocr = MonkeyOCR()
-    
+
     # Prepare document
     if binary:
         # Save binary to temporary file
         with tempfile.NamedTemporaryFile(
-            delete=False, 
+            delete=False,
             suffix=os.path.splitext(filename)[1]
         ) as tmp_file:
             tmp_file.write(binary)
             temp_path = tmp_file.name
     else:
         temp_path = filename
-    
+
     try:
         safe_callback(0.2, "Processing document with MonkeyOCR...")
-        
+
         # Process with MonkeyOCR
         config = kwargs.get("parser_config", {})
         result = monkey_ocr.get_markdown_result(temp_path, config)
-        
+
         safe_callback(0.8, "Formatting results for knowledge base...")
-        
+
         # Convert to RAGFlow format
         doc = {
             "docnm_kwd": filename,
@@ -609,32 +609,32 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
             ),
             "doc_type_kwd": "monkey_ocr"
         }
-        
+
         # Process markdown output from MonkeyOCR
         if result.get("markdown"):
             eng = lang.lower() == "english"
             tokenize(doc, result["markdown"], eng)
-            
+
             # Add structure information if available
             if result.get("structure"):
                 doc["structure_info"] = result["structure"]
-            
+
             # Add metadata if available
             if result.get("metadata"):
                 doc["metadata"] = result["metadata"]
-            
+
             safe_callback(1.0, "MonkeyOCR processing complete")
             return [doc]
         else:
             logger.warning("MonkeyOCR returned no markdown content")
             return []
-        
+
     except Exception as e:
         safe_callback(-1, f"MonkeyOCR processing failed: {str(e)}")
         logger.error(f"Error processing {filename}: {e}")
         # Return empty list to allow graceful fallback
         return []
-        
+
     finally:
         # Clean up temporary file
         if binary and os.path.exists(temp_path):
@@ -659,7 +659,7 @@ from .monkey_ocr import MonkeyOCR  # 🆕 ADD THIS LINE
 
 __all__ = [
     "OCR",
-    "Recognizer", 
+    "Recognizer",
     "LayoutRecognizer",
     "TableStructureRecognizer",
     "MonkeyOCR",  # 🆕 ADD THIS LINE
@@ -676,8 +676,8 @@ from .monkey_ocr_parser import chunk as monkey_ocr_chunk
 # Update the FACTORY dictionary
 FACTORY = {
     ParserType.PRESENTATION.value: presentation,
-    ParserType.PICTURE.value: picture, 
-    ParserType.AUDIO.value: audio, 
+    ParserType.PICTURE.value: picture,
+    ParserType.AUDIO.value: audio,
     ParserType.EMAIL.value: email,
     ParserType.MONKEY_OCR.value: monkey_ocr_chunk,  # 🆕 ADD THIS LINE
 }
@@ -703,13 +703,13 @@ def get_parser(doc_type, filename, default):
         return ParserType.PRESENTATION.value
     if re.search(r"\.(eml)$", filename):
         return ParserType.EMAIL.value
-    
+
     # 🆕 ADD: MonkeyOCR for supported file types
     if re.search(r"\.(pdf|png|jpg|jpeg)$", filename):
         # Check if MonkeyOCR is configured as default
         if default == ParserType.MONKEY_OCR.value:
             return ParserType.MONKEY_OCR.value
-    
+
     return default
 ```
 
@@ -798,7 +798,7 @@ pip install -e .
 ### 🖥️ System Requirements
 - **GPU**: Recommended (CUDA-compatible)
 - **Memory**: 8GB+ RAM for model loading
-- **Storage**: 
+- **Storage**:
   - 5GB+ for MonkeyOCR model files
   - 500MB+ for MonkeyOCR source code (`monkeyocr/` folder)
 - **Python**: 3.8+
@@ -855,7 +855,7 @@ pip install -e .
 - [ ] "monkey_ocr" appears in parser_ids string
 - [ ] No import errors in modified files
 
-### ✅ Phase 2 Validation  
+### ✅ Phase 2 Validation
 - [ ] `deepdoc/vision/monkey_ocr.py` imports successfully
 - [ ] `MonkeyOCR` class follows deepdoc.vision patterns
 - [ ] MonkeyOCR exposed via `deepdoc.vision.__init__.py`
@@ -904,7 +904,7 @@ The updated implementation follows an efficient memory management pattern:
 
 ### 🔄 **Per-Task Lifecycle**
 1. **Load**: Model loaded fresh for each document processing task
-2. **Process**: Document is processed with full model capabilities  
+2. **Process**: Document is processed with full model capabilities
 3. **Unload**: Model is immediately unloaded and memory freed
 4. **Cleanup**: Garbage collection ensures complete memory cleanup
 
@@ -939,7 +939,7 @@ MonkeyOCR integrates into the **existing RAGFlow database** without any schema m
 # ✅ Use current documents table as-is
 {
     'id': doc_id,
-    'kb_id': kb_id, 
+    'kb_id': kb_id,
     'parser_id': 'monkey_ocr',           # ✅ Set to monkey_ocr
     'parser_config': json.dumps({        # ✅ Store MonkeyOCR config
         'model_variant': 'pro-1.2B',
@@ -963,7 +963,7 @@ chunk = {
     'content_with_weight': markdown_text,     # ✅ Main content from MonkeyOCR
     'content_ltks': tokenized_content,        # ✅ Tokenized content
     'content_sm_ltks': summary_tokens,        # ✅ Summary tokens
-    'important_kwd': structure_keywords,      # ✅ ['header', 'table', 'financial']  
+    'important_kwd': structure_keywords,      # ✅ ['header', 'table', 'financial']
     'important_tks': structure_tokens,        # ✅ Structure-aware tokens
     'img_id': json.dumps({                    # ✅ Store MonkeyOCR metadata in img_id
         'structure_type': 'header',
@@ -996,43 +996,43 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
     def safe_callback(progress, message):
         if callback:
             callback(progress, message)
-    
+
     safe_callback(0.1, "Initializing MonkeyOCR...")
-    
+
     # Initialize MonkeyOCR
     monkey_ocr = MonkeyOCR()
-    
+
     # Prepare document
     if binary:
         with tempfile.NamedTemporaryFile(
-            delete=False, 
+            delete=False,
             suffix=os.path.splitext(filename)[1]
         ) as tmp_file:
             tmp_file.write(binary)
             temp_path = tmp_file.name
     else:
         temp_path = filename
-    
+
     try:
         safe_callback(0.2, "Processing with MonkeyOCR...")
-        
+
         # Get structured result from MonkeyOCR
         result = monkey_ocr.get_markdown_result(temp_path, kwargs.get("parser_config", {}))
-        
+
         safe_callback(0.5, "Converting to RAGFlow chunks...")
-        
+
         # Convert to RAGFlow chunk format using existing schema
         chunks = convert_to_ragflow_chunks(result, filename, lang)
-        
+
         safe_callback(1.0, f"Successfully created {len(chunks)} chunks")
-        
+
         return chunks
-        
+
     except Exception as e:
         safe_callback(-1, f"MonkeyOCR processing failed: {str(e)}")
         logger.error(f"Error processing {filename}: {e}")
         return []
-        
+
     finally:
         # Cleanup
         if binary and os.path.exists(temp_path):
@@ -1049,14 +1049,14 @@ def convert_to_ragflow_chunks(result, filename, lang):
     markdown_content = result.get('markdown', '')
     structure_info = result.get('structure', [])
     metadata = result.get('metadata', {})
-    
+
     if structure_info:
         # Create structure-aware chunks
         for position, element in enumerate(structure_info):
             element_text = element.get('text', '').strip()
             if not element_text:
                 continue
-                
+
             # Create base chunk using existing RAGFlow format
             doc = {
                 "docnm_kwd": filename,
@@ -1065,11 +1065,11 @@ def convert_to_ragflow_chunks(result, filename, lang):
                 ),
                 "doc_type_kwd": "monkey_ocr"
             }
-            
+
             # Tokenize content using existing RAGFlow tokenizer
             eng = lang.lower() == "english"
             tokenize(doc, element_text, eng)
-            
+
             # ✅ Store MonkeyOCR metadata in existing img_id field as JSON
             monkeyocr_metadata = {
                 'structure_type': element.get('type', 'text'),
@@ -1080,18 +1080,18 @@ def convert_to_ragflow_chunks(result, filename, lang):
                 'parent_id': element.get('parent_id'),
                 'model_version': metadata.get('model_version', 'unknown')
             }
-            
+
             # ✅ Use existing important_kwd for structure keywords
             structure_keywords = [
                 element.get('type', 'text'),
                 f"page_{element.get('page', 0)}",
                 f"level_{element.get('level', 0)}"
             ]
-            
+
             # Final chunk in existing RAGFlow format
             chunk = {
                 "docnm_kwd": doc["docnm_kwd"],
-                "title_tks": doc["title_tks"], 
+                "title_tks": doc["title_tks"],
                 "doc_type_kwd": doc["doc_type_kwd"],
                 "content_with_weight": doc["content_with_weight"],
                 "content_ltks": doc["content_ltks"],
@@ -1102,12 +1102,12 @@ def convert_to_ragflow_chunks(result, filename, lang):
                 "page_num": element.get('page', 0),
                 "position": position
             }
-            
+
             chunks.append(chunk)
     else:
         # Fallback: simple paragraph chunking
         paragraphs = [p.strip() for p in markdown_content.split('\n\n') if p.strip()]
-        
+
         for position, paragraph in enumerate(paragraphs):
             doc = {
                 "docnm_kwd": filename,
@@ -1116,10 +1116,10 @@ def convert_to_ragflow_chunks(result, filename, lang):
                 ),
                 "doc_type_kwd": "monkey_ocr"
             }
-            
+
             eng = lang.lower() == "english"
             tokenize(doc, paragraph, eng)
-            
+
             # Simple metadata for fallback chunks
             simple_metadata = {
                 'structure_type': 'paragraph',
@@ -1127,11 +1127,11 @@ def convert_to_ragflow_chunks(result, filename, lang):
                 'page': 0,
                 'model_version': metadata.get('model_version', 'unknown')
             }
-            
+
             chunk = {
                 "docnm_kwd": doc["docnm_kwd"],
                 "title_tks": doc["title_tks"],
-                "doc_type_kwd": doc["doc_type_kwd"], 
+                "doc_type_kwd": doc["doc_type_kwd"],
                 "content_with_weight": doc["content_with_weight"],
                 "content_ltks": doc["content_ltks"],
                 "content_sm_ltks": doc.get("content_sm_ltks", ""),
@@ -1141,9 +1141,9 @@ def convert_to_ragflow_chunks(result, filename, lang):
                 "page_num": 0,
                 "position": position
             }
-            
+
             chunks.append(chunk)
-    
+
     return chunks
 ```
 
@@ -1151,12 +1151,12 @@ def convert_to_ragflow_chunks(result, filename, lang):
 
 ### **📈 Benefits of Using Existing Schema**
 
-✅ **Zero Migration**: No database changes required  
-✅ **Backward Compatible**: Works with existing RAGFlow infrastructure  
-✅ **Immediate Integration**: Can deploy without schema updates  
-✅ **Flexible Storage**: JSON in `img_id` allows complex MonkeyOCR metadata  
-✅ **Existing Indexes**: Leverages current Elasticsearch setup  
-✅ **Simple Queries**: Use existing `important_kwd` for structure filtering  
+✅ **Zero Migration**: No database changes required
+✅ **Backward Compatible**: Works with existing RAGFlow infrastructure
+✅ **Immediate Integration**: Can deploy without schema updates
+✅ **Flexible Storage**: JSON in `img_id` allows complex MonkeyOCR metadata
+✅ **Existing Indexes**: Leverages current Elasticsearch setup
+✅ **Simple Queries**: Use existing `important_kwd` for structure filtering
 
 ### **🎯 MonkeyOCR Data Storage Strategy**
 
@@ -1168,4 +1168,4 @@ def convert_to_ragflow_chunks(result, filename, lang):
 | `page_num` | ✅ Page number | 1, 2, 3... |
 | `position` | ✅ Element order | 0, 1, 2... |
 
-This approach integrates MonkeyOCR **seamlessly** into existing RAGFlow without any database schema changes! 🎯 
+This approach integrates MonkeyOCR **seamlessly** into existing RAGFlow without any database schema changes! 🎯

@@ -28,4 +28,3 @@ When debugging your chat assistant, you can use AI search as a reference to veri
 ### key difference between an AI search and an AI chat?
 
 A chat is a multi-turn AI conversation where you can define your retrieval strategy (a weighted reranking score can be used to replace the weighted vector similarity in a hybrid search) and choose your chat model. In an AI chat, you can configure advanced RAG strategies, such as knowledge graphs, auto-keyword, and auto-question, for your specific case. Retrieved chunks are not displayed along with the answer.
-

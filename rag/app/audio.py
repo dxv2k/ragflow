@@ -23,10 +23,7 @@ from rag.nlp import tokenize
 
 
 def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
-    doc = {
-        "docnm_kwd": filename,
-        "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))
-    }
+    doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))}
     doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
 
     # is it English

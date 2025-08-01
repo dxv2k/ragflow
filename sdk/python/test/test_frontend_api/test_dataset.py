@@ -83,7 +83,7 @@ def test_duplicated_name_dataset(get_auth):
     res = list_dataset(get_auth, 1)
     data = res.get("data").get("kbs")
     dataset_list = []
-    pattern = r'^test_create_dataset.*'
+    pattern = r"^test_create_dataset.*"
     for item in data:
         dataset_name = item.get("name")
         dataset_id = item.get("id")
@@ -101,10 +101,10 @@ def test_invalid_name_dataset(get_auth):
     # create dataset
     # with pytest.raises(Exception) as e:
     res = create_dataset(get_auth, 0)
-    assert res['code'] == 102
+    assert res["code"] == 102
 
     res = create_dataset(get_auth, "")
-    assert res['code'] == 102
+    assert res["code"] == 102
 
     long_string = ""
 
@@ -112,7 +112,7 @@ def test_invalid_name_dataset(get_auth):
         long_string += random.choice(string.ascii_letters + string.digits)
 
     res = create_dataset(get_auth, long_string)
-    assert res['code'] == 102
+    assert res["code"] == 102
     print(res)
 
 
@@ -137,9 +137,7 @@ def test_update_different_params_dataset_success(get_auth):
     print(f"found {len(dataset_list)} datasets")
     dataset_id = dataset_list[0]
 
-    json_req = {"kb_id": dataset_id, "name": "test_update_dataset", "description": "test", "permission": "me",
-                "parser_id": "presentation",
-                "language": "spanish"}
+    json_req = {"kb_id": dataset_id, "name": "test_update_dataset", "description": "test", "permission": "me", "parser_id": "presentation", "language": "spanish"}
     res = update_dataset(get_auth, json_req)
     assert res.get("code") == 0, f"{res.get('message')}"
 

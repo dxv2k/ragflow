@@ -31,7 +31,7 @@
 - Model download timeouts on slow networks
 
 ### **🔄 Concurrency & Race Conditions**
-- Multiple workers trying to process same task simultaneously  
+- Multiple workers trying to process same task simultaneously
 - Race conditions in task queue claiming/releasing
 - Spot instance interruption during critical processing phases
 - Model loading conflicts when multiple pods start simultaneously
@@ -63,7 +63,7 @@
 ### **🔐 Security & Input Validation Issues**
 - SQL injection through file metadata
 - Path traversal attacks through filenames
-- XXE attacks through XML-based documents  
+- XXE attacks through XML-based documents
 - Denial of Service through resource exhaustion
 - Malicious PDFs triggering parser vulnerabilities
 - Script injection through document content

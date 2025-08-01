@@ -37,9 +37,9 @@ Each RAGFlow release is available in two editions:
 
 ### Which embedding models can be deployed locally?
 
-RAGFlow offers two Docker image editions, `v0.19.0-slim` and `v0.19.0`:  
-  
-- `infiniflow/ragflow:v0.19.0-slim` (default): The RAGFlow Docker image without embedding models.  
+RAGFlow offers two Docker image editions, `v0.19.0-slim` and `v0.19.0`:
+
+- `infiniflow/ragflow:v0.19.0-slim` (default): The RAGFlow Docker image without embedding models.
 - `infiniflow/ragflow:v0.19.0`: The RAGFlow Docker image with embedding models including:
   - Built-in embedding models:
     - `BAAI/bge-large-zh-v1.5`
@@ -65,11 +65,11 @@ You can find the RAGFlow version number on the **System** page of the UI:
 If you build RAGFlow from source, the version number is also in the system log:
 
 ```
-        ____   ___    ______ ______ __               
+        ____   ___    ______ ______ __
        / __ \ /   |  / ____// ____// /____  _      __
       / /_/ // /| | / / __ / /_   / // __ \| | /| / /
-     / _, _// ___ |/ /_/ // __/  / // /_/ /| |/ |/ / 
-    /_/ |_|/_/  |_|\____//_/    /_/ \____/ |__/|__/                             
+     / _, _// ___ |/ /_/ // __/  / // /_/ /| |/ |/ /
+    /_/ |_|/_/  |_|\____//_/    /_/ \____/ |__/|__/
 
 2025-02-18 10:10:43,835 INFO     1445658 RAGFlow version: v0.15.0-50-g6daae7f2 full
 ```
@@ -190,7 +190,7 @@ To fix this issue, use https://hf-mirror.com instead:
 3. Start up the server:
 
    ```bash
-   docker compose up -d 
+   docker compose up -d
    ```
 
 ---
@@ -223,11 +223,11 @@ You will not log in to RAGFlow unless the server is fully initialized. Run `dock
 *The server is successfully initialized, if your system displays the following:*
 
 ```
-     ____   ___    ______ ______ __               
+     ____   ___    ______ ______ __
     / __ \ /   |  / ____// ____// /____  _      __
    / /_/ // /| | / / __ / /_   / // __ \| | /| / /
-  / _, _// ___ |/ /_/ // __/  / // /_/ /| |/ |/ / 
- /_/ |_|/_/  |_|\____//_/    /_/ \____/ |__/|__/  
+  / _, _// ___ |/ /_/ // __/  / // /_/ /| |/ |/ /
+ /_/ |_|/_/  |_|\____//_/    /_/ \____/ |__/|__/
 
  * Running on all addresses (0.0.0.0)
  * Running on http://127.0.0.1:9380
@@ -330,7 +330,7 @@ The status of a Docker container status does not necessarily reflect the status 
    $ docker ps
    ```
 
-   *The status of a healthy Elasticsearch component should look as follows:*  
+   *The status of a healthy Elasticsearch component should look as follows:*
 
    ```
    91220e3285dd   docker.elastic.co/elasticsearch/elasticsearch:8.11.3   "/bin/tini -- /usr/l…"   11 hours ago   Up 11 hours (healthy)     9300/tcp, 0.0.0.0:9200->9200/tcp, :::9200->9200/tcp           ragflow-es-01
@@ -383,7 +383,7 @@ Yes, we do. See the Python files under the **rag/app** folder.
    $ docker ps
    ```
 
-   *The status of a healthy Elasticsearch component should look as follows:*  
+   *The status of a healthy Elasticsearch component should look as follows:*
 
    ```bash
    cd29bcb254bc   quay.io/minio/minio:RELEASE.2023-12-20T01-00-02Z       "/usr/bin/docker-ent…"   2 weeks ago    Up 11 hours      0.0.0.0:9001->9001/tcp, :::9001->9001/tcp, 0.0.0.0:9000->9000/tcp, :::9000->9000/tcp     ragflow-minio
@@ -466,7 +466,7 @@ See [Upgrade RAGFlow](./guides/upgrade_ragflow.mdx) for more information.
 
 To switch your document engine from Elasticsearch to [Infinity](https://github.com/infiniflow/infinity):
 
-1. Stop all running containers:  
+1. Stop all running containers:
 
    ```bash
    $ docker compose -f docker/docker-compose.yml down -v
@@ -476,7 +476,7 @@ To switch your document engine from Elasticsearch to [Infinity](https://github.c
 :::
 
 2. In **docker/.env**, set `DOC_ENGINE=${DOC_ENGINE:-infinity}`
-3. Restart your Docker image: 
+3. Restart your Docker image:
 
    ```bash
    $ docker compose -f docker-compose.yml up -d

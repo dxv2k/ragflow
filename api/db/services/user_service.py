@@ -37,6 +37,7 @@ class UserService(CommonService):
     Attributes:
         model: The User model class for database operations.
     """
+
     model = User
 
     @classmethod
@@ -68,8 +69,7 @@ class UserService(CommonService):
         Returns:
             User object if authentication successful, None otherwise.
         """
-        user = cls.model.select().where((cls.model.email == email),
-                                        (cls.model.status == StatusEnum.VALID.value)).first()
+        user = cls.model.select().where((cls.model.email == email), (cls.model.status == StatusEnum.VALID.value)).first()
         if user and check_password_hash(str(user.password), password):
             return user
         else:
@@ -81,8 +81,7 @@ class UserService(CommonService):
         if "id" not in kwargs:
             kwargs["id"] = get_uuid()
         if "password" in kwargs:
-            kwargs["password"] = generate_password_hash(
-                str(kwargs["password"]))
+            kwargs["password"] = generate_password_hash(str(kwargs["password"]))
 
         kwargs["create_time"] = current_timestamp()
         kwargs["create_date"] = datetime_format(datetime.now())
@@ -95,8 +94,7 @@ class UserService(CommonService):
     @DB.connection_context()
     def delete_user(cls, user_ids, update_user_dict):
         with DB.atomic():
-            cls.model.update({"status": 0}).where(
-                cls.model.id.in_(user_ids)).execute()
+            cls.model.update({"status": 0}).where(cls.model.id.in_(user_ids)).execute()
 
     @classmethod
     @DB.connection_context()
@@ -105,8 +103,7 @@ class UserService(CommonService):
             if user_dict:
                 user_dict["update_time"] = current_timestamp()
                 user_dict["update_date"] = datetime_format(datetime.now())
-                cls.model.update(user_dict).where(
-                    cls.model.id == user_id).execute()
+                cls.model.update(user_dict).where(cls.model.id == user_id).execute()
 
 
 class TenantService(CommonService):
@@ -118,6 +115,7 @@ class TenantService(CommonService):
     Attributes:
         model: The Tenant model class for database operations.
     """
+
     model = Tenant
 
     @classmethod
@@ -133,31 +131,32 @@ class TenantService(CommonService):
             cls.model.img2txt_id,
             cls.model.tts_id,
             cls.model.parser_ids,
-            UserTenant.role]
-        return list(cls.model.select(*fields)
-                    .join(UserTenant, on=((cls.model.id == UserTenant.tenant_id) & (UserTenant.user_id == user_id) & (UserTenant.status == StatusEnum.VALID.value) & (UserTenant.role == UserTenantRole.OWNER)))
-                    .where(cls.model.status == StatusEnum.VALID.value).dicts())
+            UserTenant.role,
+        ]
+        return list(
+            cls.model.select(*fields)
+            .join(UserTenant, on=((cls.model.id == UserTenant.tenant_id) & (UserTenant.user_id == user_id) & (UserTenant.status == StatusEnum.VALID.value) & (UserTenant.role == UserTenantRole.OWNER)))
+            .where(cls.model.status == StatusEnum.VALID.value)
+            .dicts()
+        )
 
     @classmethod
     @DB.connection_context()
     def get_joined_tenants_by_user_id(cls, user_id):
-        fields = [
-            cls.model.id.alias("tenant_id"),
-            cls.model.name,
-            cls.model.llm_id,
-            cls.model.embd_id,
-            cls.model.asr_id,
-            cls.model.img2txt_id,
-            UserTenant.role]
-        return list(cls.model.select(*fields)
-                    .join(UserTenant, on=((cls.model.id == UserTenant.tenant_id) & (UserTenant.user_id == user_id) & (UserTenant.status == StatusEnum.VALID.value) & (UserTenant.role == UserTenantRole.NORMAL)))
-                    .where(cls.model.status == StatusEnum.VALID.value).dicts())
+        fields = [cls.model.id.alias("tenant_id"), cls.model.name, cls.model.llm_id, cls.model.embd_id, cls.model.asr_id, cls.model.img2txt_id, UserTenant.role]
+        return list(
+            cls.model.select(*fields)
+            .join(
+                UserTenant, on=((cls.model.id == UserTenant.tenant_id) & (UserTenant.user_id == user_id) & (UserTenant.status == StatusEnum.VALID.value) & (UserTenant.role == UserTenantRole.NORMAL))
+            )
+            .where(cls.model.status == StatusEnum.VALID.value)
+            .dicts()
+        )
 
     @classmethod
     @DB.connection_context()
     def decrease(cls, user_id, num):
-        num = cls.model.update(credit=cls.model.credit - num).where(
-            cls.model.id == user_id).execute()
+        num = cls.model.update(credit=cls.model.credit - num).where(cls.model.id == user_id).execute()
         if num == 0:
             raise LookupError("Tenant not found which is supposed to be there")
 
@@ -165,7 +164,7 @@ class TenantService(CommonService):
     @DB.connection_context()
     def user_gateway(cls, tenant_id):
         hashobj = hashlib.sha256(tenant_id.encode("utf-8"))
-        return int(hashobj.hexdigest(), 16)%len(MINIO)
+        return int(hashobj.hexdigest(), 16) % len(MINIO)
 
 
 class UserTenantService(CommonService):
@@ -177,6 +176,7 @@ class UserTenantService(CommonService):
     Attributes:
         model: The UserTenant model class for database operations.
     """
+
     model = UserTenant
 
     @classmethod
@@ -212,26 +212,25 @@ class UserTenantService(CommonService):
             User.is_anonymous,
             User.status,
             User.update_date,
-            User.is_superuser]
-        return list(cls.model.select(*fields)
-                    .join(User, on=((cls.model.user_id == User.id) & (cls.model.status == StatusEnum.VALID.value) & (cls.model.role != UserTenantRole.OWNER)))
-                    .where(cls.model.tenant_id == tenant_id)
-                    .dicts())
+            User.is_superuser,
+        ]
+        return list(
+            cls.model.select(*fields)
+            .join(User, on=((cls.model.user_id == User.id) & (cls.model.status == StatusEnum.VALID.value) & (cls.model.role != UserTenantRole.OWNER)))
+            .where(cls.model.tenant_id == tenant_id)
+            .dicts()
+        )
 
     @classmethod
     @DB.connection_context()
     def get_tenants_by_user_id(cls, user_id):
-        fields = [
-            cls.model.tenant_id,
-            cls.model.role,
-            User.nickname,
-            User.email,
-            User.avatar,
-            User.update_date
-        ]
-        return list(cls.model.select(*fields)
-                    .join(User, on=((cls.model.tenant_id == User.id) & (UserTenant.user_id == user_id) & (UserTenant.status == StatusEnum.VALID.value)))
-                    .where(cls.model.status == StatusEnum.VALID.value).dicts())
+        fields = [cls.model.tenant_id, cls.model.role, User.nickname, User.email, User.avatar, User.update_date]
+        return list(
+            cls.model.select(*fields)
+            .join(User, on=((cls.model.tenant_id == User.id) & (UserTenant.user_id == user_id) & (UserTenant.status == StatusEnum.VALID.value)))
+            .where(cls.model.status == StatusEnum.VALID.value)
+            .dicts()
+        )
 
     @classmethod
     @DB.connection_context()
@@ -243,10 +242,7 @@ class UserTenantService(CommonService):
     @DB.connection_context()
     def filter_by_tenant_and_user_id(cls, tenant_id, user_id):
         try:
-            user_tenant = cls.model.select().where(
-                (cls.model.tenant_id == tenant_id) & (cls.model.status == StatusEnum.VALID.value) &
-                (cls.model.user_id == user_id)
-            ).first()
+            user_tenant = cls.model.select().where((cls.model.tenant_id == tenant_id) & (cls.model.status == StatusEnum.VALID.value) & (cls.model.user_id == user_id)).first()
             return user_tenant
         except peewee.DoesNotExist:
             return None

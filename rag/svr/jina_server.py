@@ -38,9 +38,7 @@ model_name = ""
 class TokenStreamingExecutor(Executor):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name, device_map="auto", torch_dtype="auto"
-        )
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", torch_dtype="auto")
 
     @requests(on="/chat")
     async def generate(self, doc: Prompt, **kwargs) -> Generation:
@@ -49,18 +47,9 @@ class TokenStreamingExecutor(Executor):
             tokenize=False,
         )
         inputs = tokenizer([text], return_tensors="pt")
-        generation_config = GenerationConfig(
-            **doc.gen_conf,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id
-        )
-        generated_ids = self.model.generate(
-            inputs.input_ids, generation_config=generation_config
-        )
-        generated_ids = [
-            output_ids[len(input_ids) :]
-            for input_ids, output_ids in zip(inputs.input_ids, generated_ids)
-        ]
+        generation_config = GenerationConfig(**doc.gen_conf, eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.eos_token_id)
+        generated_ids = self.model.generate(inputs.input_ids, generation_config=generation_config)
+        generated_ids = [output_ids[len(input_ids) :] for input_ids, output_ids in zip(inputs.input_ids, generated_ids)]
 
         response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         yield Generation(text=response)
@@ -76,20 +65,12 @@ class TokenStreamingExecutor(Executor):
         max_new_tokens = 512
         if "max_new_tokens" in doc.gen_conf:
             max_new_tokens = doc.gen_conf.pop("max_new_tokens")
-        generation_config = GenerationConfig(
-            **doc.gen_conf,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id
-        )
+        generation_config = GenerationConfig(**doc.gen_conf, eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.eos_token_id)
         for _ in range(max_new_tokens):
-            output = self.model.generate(
-                **input, max_new_tokens=1, generation_config=generation_config
-            )
+            output = self.model.generate(**input, max_new_tokens=1, generation_config=generation_config)
             if output[0][-1] == tokenizer.eos_token_id:
                 break
-            yield Generation(
-                text=tokenizer.decode(output[0][input_len:], skip_special_tokens=True)
-            )
+            yield Generation(text=tokenizer.decode(output[0][input_len:], skip_special_tokens=True))
             input = {
                 "input_ids": output,
                 "attention_mask": torch.ones(1, len(output[0])),
@@ -103,7 +84,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     model_name = args.model_name
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    with Deployment(
-        uses=TokenStreamingExecutor, port=args.port, protocol="grpc"
-    ) as dep:
+    with Deployment(uses=TokenStreamingExecutor, port=args.port, protocol="grpc") as dep:
         dep.block()

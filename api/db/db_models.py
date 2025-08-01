@@ -264,14 +264,15 @@ class BaseDataBase:
 
 def with_retry(max_retries=3, retry_delay=1.0):
     """Decorator: Add retry mechanism to database operations
-    
+
     Args:
         max_retries (int): maximum number of retries
         retry_delay (float): initial retry delay (seconds), will increase exponentially
-        
+
     Returns:
         decorated function
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -284,26 +285,28 @@ def with_retry(max_retries=3, retry_delay=1.0):
                     # get self and method name for logging
                     self_obj = args[0] if args else None
                     func_name = func.__name__
-                    lock_name = getattr(self_obj, 'lock_name', 'unknown') if self_obj else 'unknown'
-                    
+                    lock_name = getattr(self_obj, "lock_name", "unknown") if self_obj else "unknown"
+
                     if retry < max_retries - 1:
-                        current_delay = retry_delay * (2 ** retry)
-                        logging.warning(f"{func_name} {lock_name} failed: {str(e)}, retrying ({retry+1}/{max_retries})")
+                        current_delay = retry_delay * (2**retry)
+                        logging.warning(f"{func_name} {lock_name} failed: {str(e)}, retrying ({retry + 1}/{max_retries})")
                         time.sleep(current_delay)
                     else:
                         logging.error(f"{func_name} {lock_name} failed after all attempts: {str(e)}")
-            
+
             if last_exception:
                 raise last_exception
             return False
+
         return wrapper
+
     return decorator
 
 
 class PostgresDatabaseLock:
     def __init__(self, lock_name, timeout=10, db=None):
         self.lock_name = lock_name
-        self.lock_id = int(hashlib.md5(lock_name.encode()).hexdigest(), 16) % (2**31-1)
+        self.lock_id = int(hashlib.md5(lock_name.encode()).hexdigest(), 16) % (2**31 - 1)
         self.timeout = int(timeout)
         self.db = db if db else DB
 
@@ -542,7 +545,7 @@ class LLM(DataBaseModel):
     max_tokens = IntegerField(default=0)
 
     tags = CharField(max_length=255, null=False, help_text="LLM, Text Embedding, Image2Text, Chat, 32k...", index=True)
-    is_tools =  BooleanField(null=False, help_text="support tools", default=False)
+    is_tools = BooleanField(null=False, help_text="support tools", default=False)
     status = CharField(max_length=1, null=True, help_text="is it validate(0: wasted, 1: validate)", default="1", index=True)
 
     def __str__(self):

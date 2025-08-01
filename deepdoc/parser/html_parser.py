@@ -22,9 +22,9 @@ import chardet
 
 
 def get_encoding(file):
-    with open(file,'rb') as f:
+    with open(file, "rb") as f:
         tmp = chardet.detect(f.read())
-        return tmp['encoding']
+        return tmp["encoding"]
 
 
 class RAGFlowHtmlParser:
@@ -34,7 +34,7 @@ class RAGFlowHtmlParser:
             encoding = find_codec(binary)
             txt = binary.decode(encoding, errors="ignore")
         else:
-            with open(fnm, "r",encoding=get_encoding(fnm)) as f:
+            with open(fnm, "r", encoding=get_encoding(fnm)) as f:
                 txt = f.read()
         return self.parser_txt(txt)
 

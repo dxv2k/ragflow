@@ -11,7 +11,7 @@ def parse_requirements(filename):
 
     for line in lines:
         if "http" in line:
-            pkg_name_without_url = line.split('@')[0].strip()
+            pkg_name_without_url = line.split("@")[0].strip()
             requires.append(pkg_name_without_url)
         else:
             requires.append(line)
@@ -19,9 +19,8 @@ def parse_requirements(filename):
     return requires
 
 
-if __name__ == '__main__':
-    with Path(Path(__file__).parent,
-              'README.md').open(encoding='utf-8') as file:
+if __name__ == "__main__":
+    with Path(Path(__file__).parent, "README.md").open(encoding="utf-8") as file:
         long_description = file.read()
     setup(
         name="magic_pdf",
@@ -30,7 +29,7 @@ if __name__ == '__main__':
         package_data={
             "magic_pdf.resources": ["**"],
         },
-        install_requires=parse_requirements('requirements.txt'),
+        install_requires=parse_requirements("requirements.txt"),
         description="MonkeyOCR: Document Parsing with a Structure-Recognition-Relation Triplet Paradigm",
         long_description=long_description,
         long_description_content_type="text/markdown",

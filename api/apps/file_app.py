@@ -34,7 +34,7 @@ from api.utils.file_utils import filename_type
 from rag.utils.storage_factory import STORAGE_IMPL
 
 
-@manager.route('/upload', methods=['POST'])  # noqa: F821
+@manager.route("/upload", methods=["POST"])  # noqa: F821
 @login_required
 # @validate_request("parent_id")
 def upload():
@@ -44,31 +44,29 @@ def upload():
         root_folder = FileService.get_root_folder(current_user.id)
         pf_id = root_folder["id"]
 
-    if 'file' not in request.files:
-        return get_json_result(
-            data=False, message='No file part!', code=settings.RetCode.ARGUMENT_ERROR)
-    file_objs = request.files.getlist('file')
+    if "file" not in request.files:
+        return get_json_result(data=False, message="No file part!", code=settings.RetCode.ARGUMENT_ERROR)
+    file_objs = request.files.getlist("file")
 
     for file_obj in file_objs:
-        if file_obj.filename == '':
-            return get_json_result(
-                data=False, message='No file selected!', code=settings.RetCode.ARGUMENT_ERROR)
+        if file_obj.filename == "":
+            return get_json_result(data=False, message="No file selected!", code=settings.RetCode.ARGUMENT_ERROR)
     file_res = []
     try:
         e, pf_folder = FileService.get_by_id(pf_id)
         if not e:
-            return get_data_error_result( message="Can't find this folder!")
+            return get_data_error_result(message="Can't find this folder!")
         for file_obj in file_objs:
-            MAX_FILE_NUM_PER_USER = int(os.environ.get('MAX_FILE_NUM_PER_USER', 0))
+            MAX_FILE_NUM_PER_USER = int(os.environ.get("MAX_FILE_NUM_PER_USER", 0))
             if MAX_FILE_NUM_PER_USER > 0 and DocumentService.get_doc_count(current_user.id) >= MAX_FILE_NUM_PER_USER:
-                return get_data_error_result( message="Exceed the maximum file number of a free user!")
+                return get_data_error_result(message="Exceed the maximum file number of a free user!")
 
             # split file name path
             if not file_obj.filename:
                 file_obj_names = [pf_folder.name, file_obj.filename]
             else:
-                full_path = '/' + file_obj.filename
-                file_obj_names = full_path.split('/')
+                full_path = "/" + file_obj.filename
+                file_obj_names = full_path.split("/")
             file_len = len(file_obj_names)
 
             # get folder
@@ -80,14 +78,12 @@ def upload():
                 e, file = FileService.get_by_id(file_id_list[len_id_list - 1])
                 if not e:
                     return get_data_error_result(message="Folder not found!")
-                last_folder = FileService.create_folder(file, file_id_list[len_id_list - 1], file_obj_names,
-                                                        len_id_list)
+                last_folder = FileService.create_folder(file, file_id_list[len_id_list - 1], file_obj_names, len_id_list)
             else:
                 e, file = FileService.get_by_id(file_id_list[len_id_list - 2])
                 if not e:
                     return get_data_error_result(message="Folder not found!")
-                last_folder = FileService.create_folder(file, file_id_list[len_id_list - 2], file_obj_names,
-                                                        len_id_list)
+                last_folder = FileService.create_folder(file, file_id_list[len_id_list - 2], file_obj_names, len_id_list)
 
             # file type
             filetype = filename_type(file_obj_names[file_len - 1])
@@ -95,10 +91,7 @@ def upload():
             while STORAGE_IMPL.obj_exist(last_folder.id, location):
                 location += "_"
             blob = file_obj.read()
-            filename = duplicate_name(
-                FileService.query,
-                name=file_obj_names[file_len - 1],
-                parent_id=last_folder.id)
+            filename = duplicate_name(FileService.query, name=file_obj_names[file_len - 1], parent_id=last_folder.id)
             file = {
                 "id": get_uuid(),
                 "parent_id": last_folder.id,
@@ -117,7 +110,7 @@ def upload():
         return server_error_response(e)
 
 
-@manager.route('/create', methods=['POST'])  # noqa: F821
+@manager.route("/create", methods=["POST"])  # noqa: F821
 @login_required
 @validate_request("name")
 def create():
@@ -130,34 +123,25 @@ def create():
 
     try:
         if not FileService.is_parent_folder_exist(pf_id):
-            return get_json_result(
-                data=False, message="Parent Folder Doesn't Exist!", code=settings.RetCode.OPERATING_ERROR)
+            return get_json_result(data=False, message="Parent Folder Doesn't Exist!", code=settings.RetCode.OPERATING_ERROR)
         if FileService.query(name=req["name"], parent_id=pf_id):
-            return get_data_error_result(
-                message="Duplicated folder name in the same folder.")
+            return get_data_error_result(message="Duplicated folder name in the same folder.")
 
         if input_file_type == FileType.FOLDER.value:
             file_type = FileType.FOLDER.value
         else:
             file_type = FileType.VIRTUAL.value
 
-        file = FileService.insert({
-            "id": get_uuid(),
-            "parent_id": pf_id,
-            "tenant_id": current_user.id,
-            "created_by": current_user.id,
-            "name": req["name"],
-            "location": "",
-            "size": 0,
-            "type": file_type
-        })
+        file = FileService.insert(
+            {"id": get_uuid(), "parent_id": pf_id, "tenant_id": current_user.id, "created_by": current_user.id, "name": req["name"], "location": "", "size": 0, "type": file_type}
+        )
 
         return get_json_result(data=file.to_json())
     except Exception as e:
         return server_error_response(e)
 
 
-@manager.route('/list', methods=['GET'])  # noqa: F821
+@manager.route("/list", methods=["GET"])  # noqa: F821
 @login_required
 def list_files():
     pf_id = request.args.get("parent_id")
@@ -177,8 +161,7 @@ def list_files():
         if not e:
             return get_data_error_result(message="Folder not found!")
 
-        files, total = FileService.get_by_pf_id(
-            current_user.id, pf_id, page_number, items_per_page, orderby, desc, keywords)
+        files, total = FileService.get_by_pf_id(current_user.id, pf_id, page_number, items_per_page, orderby, desc, keywords)
 
         parent_folder = FileService.get_parent_folder(pf_id)
         if not parent_folder:
@@ -189,7 +172,7 @@ def list_files():
         return server_error_response(e)
 
 
-@manager.route('/root_folder', methods=['GET'])  # noqa: F821
+@manager.route("/root_folder", methods=["GET"])  # noqa: F821
 @login_required
 def get_root_folder():
     try:
@@ -199,7 +182,7 @@ def get_root_folder():
         return server_error_response(e)
 
 
-@manager.route('/parent_folder', methods=['GET'])  # noqa: F821
+@manager.route("/parent_folder", methods=["GET"])  # noqa: F821
 @login_required
 def get_parent_folder():
     file_id = request.args.get("file_id")
@@ -214,7 +197,7 @@ def get_parent_folder():
         return server_error_response(e)
 
 
-@manager.route('/all_parent_folder', methods=['GET'])  # noqa: F821
+@manager.route("/all_parent_folder", methods=["GET"])  # noqa: F821
 @login_required
 def get_all_parent_folders():
     file_id = request.args.get("file_id")
@@ -232,7 +215,7 @@ def get_all_parent_folders():
         return server_error_response(e)
 
 
-@manager.route('/rm', methods=['POST'])  # noqa: F821
+@manager.route("/rm", methods=["POST"])  # noqa: F821
 @login_required
 @validate_request("file_ids")
 def rm():
@@ -259,8 +242,7 @@ def rm():
             else:
                 STORAGE_IMPL.rm(file.parent_id, file.location)
                 if not FileService.delete(file):
-                    return get_data_error_result(
-                        message="Database error (File removal)!")
+                    return get_data_error_result(message="Database error (File removal)!")
 
             # delete file2document
             informs = File2DocumentService.get_by_file_id(file_id)
@@ -273,8 +255,7 @@ def rm():
                 if not tenant_id:
                     return get_data_error_result(message="Tenant not found!")
                 if not DocumentService.remove_document(doc, tenant_id):
-                    return get_data_error_result(
-                        message="Database error (Document removal)!")
+                    return get_data_error_result(message="Database error (Document removal)!")
             File2DocumentService.delete_by_file_id(file_id)
 
         return get_json_result(data=True)
@@ -282,7 +263,7 @@ def rm():
         return server_error_response(e)
 
 
-@manager.route('/rename', methods=['POST'])  # noqa: F821
+@manager.route("/rename", methods=["POST"])  # noqa: F821
 @login_required
 @validate_request("file_id", "name")
 def rename():
@@ -291,36 +272,26 @@ def rename():
         e, file = FileService.get_by_id(req["file_id"])
         if not e:
             return get_data_error_result(message="File not found!")
-        if file.type != FileType.FOLDER.value \
-            and pathlib.Path(req["name"].lower()).suffix != pathlib.Path(
-                file.name.lower()).suffix:
-            return get_json_result(
-                data=False,
-                message="The extension of file can't be changed",
-                code=settings.RetCode.ARGUMENT_ERROR)
+        if file.type != FileType.FOLDER.value and pathlib.Path(req["name"].lower()).suffix != pathlib.Path(file.name.lower()).suffix:
+            return get_json_result(data=False, message="The extension of file can't be changed", code=settings.RetCode.ARGUMENT_ERROR)
         for file in FileService.query(name=req["name"], pf_id=file.parent_id):
             if file.name == req["name"]:
-                return get_data_error_result(
-                    message="Duplicated file name in the same folder.")
+                return get_data_error_result(message="Duplicated file name in the same folder.")
 
-        if not FileService.update_by_id(
-                req["file_id"], {"name": req["name"]}):
-            return get_data_error_result(
-                message="Database error (File rename)!")
+        if not FileService.update_by_id(req["file_id"], {"name": req["name"]}):
+            return get_data_error_result(message="Database error (File rename)!")
 
         informs = File2DocumentService.get_by_file_id(req["file_id"])
         if informs:
-            if not DocumentService.update_by_id(
-                    informs[0].document_id, {"name": req["name"]}):
-                return get_data_error_result(
-                    message="Database error (Document rename)!")
+            if not DocumentService.update_by_id(informs[0].document_id, {"name": req["name"]}):
+                return get_data_error_result(message="Database error (Document rename)!")
 
         return get_json_result(data=True)
     except Exception as e:
         return server_error_response(e)
 
 
-@manager.route('/get/<file_id>', methods=['GET'])  # noqa: F821
+@manager.route("/get/<file_id>", methods=["GET"])  # noqa: F821
 @login_required
 def get(file_id):
     try:
@@ -337,18 +308,15 @@ def get(file_id):
         ext = re.search(r"\.([^.]+)$", file.name)
         if ext:
             if file.type == FileType.VISUAL.value:
-                response.headers.set('Content-Type', 'image/%s' % ext.group(1))
+                response.headers.set("Content-Type", "image/%s" % ext.group(1))
             else:
-                response.headers.set(
-                    'Content-Type',
-                    'application/%s' %
-                    ext.group(1))
+                response.headers.set("Content-Type", "application/%s" % ext.group(1))
         return response
     except Exception as e:
         return server_error_response(e)
 
 
-@manager.route('/mv', methods=['POST'])  # noqa: F821
+@manager.route("/mv", methods=["POST"])  # noqa: F821
 @login_required
 @validate_request("src_file_ids", "dest_file_id")
 def move():

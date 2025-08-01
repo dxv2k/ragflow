@@ -35,8 +35,7 @@ class SwitchParam(ComponentParamBase):
         """
         self.conditions = []
         self.end_cpn_id = "answer:0"
-        self.operators = ['contains', 'not contains', 'start with', 'end with', 'empty', 'not empty', '=', '≠', '>',
-                          '<', '≥', '≤']
+        self.operators = ["contains", "not contains", "start with", "end with", "empty", "not empty", "=", "≠", ">", "<", "≥", "≤"]
 
     def check(self):
         self.check_empty(self.conditions, "[Switch] conditions")
@@ -72,7 +71,7 @@ class Switch(ComponentBase, ABC):
                     cpn_id, key = item["cpn_id"].split("@")
                     for p in self._canvas.get_component(cid)["obj"]._param.query:
                         if p["key"] == key:
-                            res.append(self.process_operator(p.get("value",""), item["operator"], item.get("value", "")))
+                            res.append(self.process_operator(p.get("value", ""), item["operator"], item.get("value", "")))
                             break
                 else:
                     out = self._canvas.get_component(cid)["obj"].output(allow_partial=False)[1]
@@ -89,7 +88,7 @@ class Switch(ComponentBase, ABC):
 
     def process_operator(self, input: str, operator: str, value: str) -> bool:
         if not isinstance(input, str) or not isinstance(value, str):
-            raise ValueError('Invalid input or value type: string')
+            raise ValueError("Invalid input or value type: string")
 
         if operator == "contains":
             return True if value.lower() in input.lower() else False
@@ -128,4 +127,4 @@ class Switch(ComponentBase, ABC):
             except Exception:
                 return True if input <= value else False
 
-        raise ValueError('Not supported operator' + operator)
+        raise ValueError("Not supported operator" + operator)

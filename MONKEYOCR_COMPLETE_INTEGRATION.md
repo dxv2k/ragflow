@@ -217,14 +217,14 @@ All services include health checks to ensure proper startup order and monitoring
 import requests
 
 # Register parser
-response = requests.post('http://localhost:9380/api/v1/monkeyocr/register', 
+response = requests.post('http://localhost:9380/api/v1/monkeyocr/register',
                         json={'tenant_id': 'your-tenant-id'})
 
 # Parse document
 with open('document.pdf', 'rb') as f:
     files = {'file': f}
     data = {'split_pages': 'false', 'pred_abandon': 'false'}
-    response = requests.post('http://localhost:9380/api/v1/monkeyocr/parse', 
+    response = requests.post('http://localhost:9380/api/v1/monkeyocr/parse',
                            files=files, data=data)
 
 # Extract text from images
@@ -286,7 +286,7 @@ curl -X POST http://localhost:9380/api/v1/monkeyocr/parse \
    ```bash
    # Check model directory
    docker exec ragflow-app ls -la /app/monkeyocr/model_weight
-   
+
    # Manual model download
    docker exec ragflow-app bash /app/docker/init_monkeyocr.sh
    ```
@@ -303,7 +303,7 @@ curl -X POST http://localhost:9380/api/v1/monkeyocr/parse \
    ```bash
    # Check dependencies
    docker exec ragflow-app pip list | grep monkeyocr
-   
+
    # Rebuild container
    docker-compose -f docker-compose-monkeyocr.yml build --no-cache
    ```
@@ -387,4 +387,4 @@ For issues and questions:
 
 ## 📄 License
 
-This integration follows the same license as the main RAGFlow project and MonkeyOCR. 
+This integration follows the same license as the main RAGFlow project and MonkeyOCR.

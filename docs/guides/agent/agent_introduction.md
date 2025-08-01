@@ -20,7 +20,7 @@ Agents and RAG are complementary techniques, each enhancing the other’s capabi
 
 :::tip NOTE
 
-Before proceeding, ensure that:  
+Before proceeding, ensure that:
 
 1. You have properly set the LLM to use. See the guides on [Configure your API key](../models/llm_api_key_setup.md) or [Deploy a local LLM](../models/deploy_local_llm.mdx) for more information.
 2. You have a knowledge base configured and the corresponding files properly parsed. See the guide on [Configure a knowledge base](../dataset/configure_knowledge_base.md) for more information.
@@ -37,7 +37,7 @@ We also provide templates catered to different business scenarios. You can eithe
 
    ![agent_templates](https://github.com/user-attachments/assets/73bd476c-4bab-4c8c-82f8-6b00fb2cd044)
 
-2. To create an agent from scratch, click the **Blank** card. Alternatively, to create an agent from one of our templates, hover over the desired card, such as **General-purpose chatbot**, click **Use this template**, name your agent in the pop-up dialogue, and click **OK** to confirm.  
+2. To create an agent from scratch, click the **Blank** card. Alternatively, to create an agent from one of our templates, hover over the desired card, such as **General-purpose chatbot**, click **Use this template**, name your agent in the pop-up dialogue, and click **OK** to confirm.
 
    *You are now taken to the **no-code workflow editor** page. The left panel lists the components (operators): Above the dividing line are the RAG-specific components; below the line are tools. We are still working to expand the component list.*
 

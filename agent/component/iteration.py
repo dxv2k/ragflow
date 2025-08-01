@@ -42,4 +42,3 @@ class Iteration(ComponentBase, ABC):
 
     def _run(self, history, **kwargs):
         return self.output(allow_partial=False)[1]
-

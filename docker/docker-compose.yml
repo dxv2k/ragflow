@@ -41,6 +41,7 @@ services:
       - TZ=${TIMEZONE}
       - HF_ENDPOINT=${HF_ENDPOINT}
       - MACOS=${MACOS}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     networks:
       - ragflow
     restart: on-failure

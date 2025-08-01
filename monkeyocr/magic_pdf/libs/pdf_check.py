@@ -15,7 +15,6 @@ def extract_pages(src_pdf_bytes: bytes) -> fitz.Document:
     pdf_docs = fitz.open("pdf", src_pdf_bytes)
     total_page = len(pdf_docs)
     if total_page == 0:
-
         logger.warning("PDF is empty, return empty document")
         return fitz.Document()
     select_page_cnt = calculate_sample_count(total_page)
@@ -37,7 +36,7 @@ def detect_invalid_chars(src_pdf_bytes: bytes) -> bool:
     text = extract_text(sample_pdf_file_like_object)
     text = text.replace("\n", "")
     # logger.info(text)
-    cid_pattern = re.compile(r'\(cid:\d+\)')
+    cid_pattern = re.compile(r"\(cid:\d+\)")
     matches = cid_pattern.findall(text)
     cid_count = len(matches)
     cid_len = sum(len(match) for match in matches)
@@ -45,7 +44,7 @@ def detect_invalid_chars(src_pdf_bytes: bytes) -> bool:
     if text_len == 0:
         cid_chars_radio = 0
     else:
-        cid_chars_radio = cid_count/(cid_count + text_len - cid_len)
+        cid_chars_radio = cid_count / (cid_count + text_len - cid_len)
     logger.info(f"cid_count: {cid_count}, text_len: {text_len}, cid_chars_radio: {cid_chars_radio}")
     if cid_chars_radio > 0.05:
         return False
@@ -54,14 +53,14 @@ def detect_invalid_chars(src_pdf_bytes: bytes) -> bool:
 
 
 def count_replacement_characters(text: str) -> int:
-    return text.count('\ufffd')
+    return text.count("\ufffd")
 
 
 def detect_invalid_chars_by_pymupdf(src_pdf_bytes: bytes) -> bool:
     sample_docs = extract_pages(src_pdf_bytes)
     doc_text = ""
     for page in sample_docs:
-        page_text = page.get_text('text', flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_MEDIABOX_CLIP)
+        page_text = page.get_text("text", flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_MEDIABOX_CLIP)
         doc_text += page_text
     text_len = len(doc_text)
     uffd_count = count_replacement_characters(doc_text)

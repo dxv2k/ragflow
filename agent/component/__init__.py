@@ -132,5 +132,5 @@ __all__ = [
     "EmailParam",
     "Code",
     "CodeParam",
-    "component_class"
+    "component_class",
 ]

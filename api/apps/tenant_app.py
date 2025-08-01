@@ -30,10 +30,7 @@ from api.utils.api_utils import get_json_result, validate_request, server_error_
 @login_required
 def user_list(tenant_id):
     if current_user.id != tenant_id:
-        return get_json_result(
-            data=False,
-            message='No authorization.',
-            code=settings.RetCode.AUTHENTICATION_ERROR)
+        return get_json_result(data=False, message="No authorization.", code=settings.RetCode.AUTHENTICATION_ERROR)
 
     try:
         users = UserTenantService.get_by_tenant_id(tenant_id)
@@ -44,15 +41,12 @@ def user_list(tenant_id):
         return server_error_response(e)
 
 
-@manager.route('/<tenant_id>/user', methods=['POST'])  # noqa: F821
+@manager.route("/<tenant_id>/user", methods=["POST"])  # noqa: F821
 @login_required
 @validate_request("email")
 def create(tenant_id):
     if current_user.id != tenant_id:
-        return get_json_result(
-            data=False,
-            message='No authorization.',
-            code=settings.RetCode.AUTHENTICATION_ERROR)
+        return get_json_result(data=False, message="No authorization.", code=settings.RetCode.AUTHENTICATION_ERROR)
 
     req = request.json
     invite_user_email = req["email"]
@@ -70,13 +64,7 @@ def create(tenant_id):
             return get_data_error_result(message=f"{invite_user_email} is the owner of the team.")
         return get_data_error_result(message=f"{invite_user_email} is in the team, but the role: {user_tenant_role} is invalid.")
 
-    UserTenantService.save(
-        id=get_uuid(),
-        user_id=user_id_to_invite,
-        tenant_id=tenant_id,
-        invited_by=current_user.id,
-        role=UserTenantRole.INVITE,
-        status=StatusEnum.VALID.value)
+    UserTenantService.save(id=get_uuid(), user_id=user_id_to_invite, tenant_id=tenant_id, invited_by=current_user.id, role=UserTenantRole.INVITE, status=StatusEnum.VALID.value)
 
     usr = invite_users[0].to_dict()
     usr = {k: v for k, v in usr.items() if k in ["id", "avatar", "email", "nickname"]}
@@ -84,14 +72,11 @@ def create(tenant_id):
     return get_json_result(data=usr)
 
 
-@manager.route('/<tenant_id>/user/<user_id>', methods=['DELETE'])  # noqa: F821
+@manager.route("/<tenant_id>/user/<user_id>", methods=["DELETE"])  # noqa: F821
 @login_required
 def rm(tenant_id, user_id):
     if current_user.id != tenant_id and current_user.id != user_id:
-        return get_json_result(
-            data=False,
-            message='No authorization.',
-            code=settings.RetCode.AUTHENTICATION_ERROR)
+        return get_json_result(data=False, message="No authorization.", code=settings.RetCode.AUTHENTICATION_ERROR)
 
     try:
         UserTenantService.filter_delete([UserTenant.tenant_id == tenant_id, UserTenant.user_id == user_id])

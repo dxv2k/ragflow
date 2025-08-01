@@ -31,9 +31,7 @@ from rag.utils import truncate
 
 
 class RecursiveAbstractiveProcessing4TreeOrganizedRetrieval:
-    def __init__(
-        self, max_cluster, llm_model, embd_model, prompt, max_token=512, threshold=0.1
-    ):
+    def __init__(self, max_cluster, llm_model, embd_model, prompt, max_token=512, threshold=0.1):
         self._max_cluster = max_cluster
         self._llm_model = llm_model
         self._embd_model = embd_model
@@ -45,9 +43,7 @@ class RecursiveAbstractiveProcessing4TreeOrganizedRetrieval:
         response = get_llm_cache(self._llm_model.llm_name, system, history, gen_conf)
         if response:
             return response
-        response = await trio.to_thread.run_sync(
-            lambda: self._llm_model.chat(system, history, gen_conf)
-        )
+        response = await trio.to_thread.run_sync(lambda: self._llm_model.chat(system, history, gen_conf))
         response = re.sub(r"^.*</think>", "", response, flags=re.DOTALL)
         if response.find("**ERROR**") >= 0:
             raise Exception(response)
@@ -86,21 +82,15 @@ class RecursiveAbstractiveProcessing4TreeOrganizedRetrieval:
         async def summarize(ck_idx: list[int]):
             nonlocal chunks
             texts = [chunks[i][0] for i in ck_idx]
-            len_per_chunk = int(
-                (self._llm_model.max_length - self._max_token) / len(texts)
-            )
-            cluster_content = "\n".join(
-                [truncate(t, max(1, len_per_chunk)) for t in texts]
-            )
+            len_per_chunk = int((self._llm_model.max_length - self._max_token) / len(texts))
+            cluster_content = "\n".join([truncate(t, max(1, len_per_chunk)) for t in texts])
             async with chat_limiter:
                 cnt = await self._chat(
                     "You're a helpful assistant.",
                     [
                         {
                             "role": "user",
-                            "content": self._prompt.format(
-                                cluster_content=cluster_content
-                            ),
+                            "content": self._prompt.format(cluster_content=cluster_content),
                         }
                     ],
                     {"temperature": 0.3, "max_tokens": self._max_token},
@@ -120,11 +110,7 @@ class RecursiveAbstractiveProcessing4TreeOrganizedRetrieval:
             if len(embeddings) == 2:
                 await summarize([start, start + 1])
                 if callback:
-                    callback(
-                        msg="Cluster one layer: {} -> {}".format(
-                            end - start, len(chunks) - end
-                        )
-                    )
+                    callback(msg="Cluster one layer: {} -> {}".format(end - start, len(chunks) - end))
                 labels.extend([0, 0])
                 layers.append((end, len(chunks)))
                 start = end
@@ -153,17 +139,11 @@ class RecursiveAbstractiveProcessing4TreeOrganizedRetrieval:
                     assert len(ck_idx) > 0
                     nursery.start_soon(summarize, ck_idx)
 
-            assert len(chunks) - end == n_clusters, "{} vs. {}".format(
-                len(chunks) - end, n_clusters
-            )
+            assert len(chunks) - end == n_clusters, "{} vs. {}".format(len(chunks) - end, n_clusters)
             labels.extend(lbls)
             layers.append((end, len(chunks)))
             if callback:
-                callback(
-                    msg="Cluster one layer: {} -> {}".format(
-                        end - start, len(chunks) - end
-                    )
-                )
+                callback(msg="Cluster one layer: {} -> {}".format(end - start, len(chunks) - end))
             start = end
             end = len(chunks)
 

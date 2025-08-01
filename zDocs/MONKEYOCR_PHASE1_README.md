@@ -301,4 +301,4 @@ For issues and questions:
 
 ## License
 
-This integration follows the same license as the main RAGFlow project and MonkeyOCR. 
+This integration follows the same license as the main RAGFlow project and MonkeyOCR.

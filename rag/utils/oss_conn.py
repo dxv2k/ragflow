@@ -28,12 +28,12 @@ class RAGFlowOSS:
     def __init__(self):
         self.conn = None
         self.oss_config = settings.OSS
-        self.access_key = self.oss_config.get('access_key', None)
-        self.secret_key = self.oss_config.get('secret_key', None)
-        self.endpoint_url = self.oss_config.get('endpoint_url', None)
-        self.region = self.oss_config.get('region', None)
-        self.bucket = self.oss_config.get('bucket', None)
-        self.prefix_path = self.oss_config.get('prefix_path', None)
+        self.access_key = self.oss_config.get("access_key", None)
+        self.secret_key = self.oss_config.get("secret_key", None)
+        self.endpoint_url = self.oss_config.get("endpoint_url", None)
+        self.region = self.oss_config.get("region", None)
+        self.bucket = self.oss_config.get("bucket", None)
+        self.prefix_path = self.oss_config.get("prefix_path", None)
         self.__open__()
 
     @staticmethod
@@ -42,14 +42,16 @@ class RAGFlowOSS:
             # If there is a default bucket, use the default bucket
             actual_bucket = self.bucket if self.bucket else bucket
             return method(self, actual_bucket, *args, **kwargs)
+
         return wrapper
-    
+
     @staticmethod
     def use_prefix_path(method):
         def wrapper(self, bucket, fnm, *args, **kwargs):
             # If the prefix path is set, use the prefix path
             fnm = f"{self.prefix_path}/{fnm}" if self.prefix_path else fnm
             return method(self, bucket, fnm, *args, **kwargs)
+
         return wrapper
 
     def __open__(self):
@@ -62,12 +64,12 @@ class RAGFlowOSS:
         try:
             # Reference：https://help.aliyun.com/zh/oss/developer-reference/use-amazon-s3-sdks-to-access-oss
             self.conn = boto3.client(
-                's3',
+                "s3",
                 region_name=self.region,
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
                 endpoint_url=self.endpoint_url,
-                config=Config(s3={"addressing_style": "virtual"}, signature_version='v4')
+                config=Config(s3={"addressing_style": "virtual"}, signature_version="v4"),
             )
         except Exception:
             logging.exception(f"Fail to connect at region {self.region}")
@@ -135,7 +137,7 @@ class RAGFlowOSS:
         for _ in range(1):
             try:
                 r = self.conn.get_object(Bucket=bucket, Key=fnm)
-                object_data = r['Body'].read()
+                object_data = r["Body"].read()
                 return object_data
             except Exception:
                 logging.exception(f"fail get {bucket}/{fnm}")
@@ -150,7 +152,7 @@ class RAGFlowOSS:
             if self.conn.head_object(Bucket=bucket, Key=fnm):
                 return True
         except ClientError as e:
-            if e.response['Error']['Code'] == '404':
+            if e.response["Error"]["Code"] == "404":
                 return False
             else:
                 raise
@@ -160,10 +162,7 @@ class RAGFlowOSS:
     def get_presigned_url(self, bucket, fnm, expires):
         for _ in range(10):
             try:
-                r = self.conn.generate_presigned_url('get_object',
-                                                     Params={'Bucket': bucket,
-                                                             'Key': fnm},
-                                                     ExpiresIn=expires)
+                r = self.conn.generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": fnm}, ExpiresIn=expires)
 
                 return r
             except Exception:
@@ -171,4 +170,3 @@ class RAGFlowOSS:
                 self.__open__()
                 time.sleep(1)
         return
-

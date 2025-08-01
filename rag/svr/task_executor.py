@@ -55,8 +55,8 @@ from api.db.services.file2document_service import File2DocumentService
 from api import settings
 from api.versions import get_ragflow_version
 from api.db.db_models import close_connection
-from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, \
-    email, tag
+from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, email, tag
+from rag.app.monkey_ocr_parser import chunk as monkey_ocr
 from rag.nlp import search, rag_tokenizer
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
 from rag.settings import DOC_MAXIMUM_SIZE, SVR_CONSUMER_GROUP_NAME, get_svr_queue_name, get_svr_queue_names, print_rag_settings, TAG_FLD, PAGERANK_FLD
@@ -83,7 +83,8 @@ FACTORY = {
     ParserType.AUDIO.value: audio,
     ParserType.EMAIL.value: email,
     ParserType.KG.value: naive,
-    ParserType.TAG.value: tag
+    ParserType.TAG.value: tag,
+    ParserType.MONKEYOCR.value: monkey_ocr,
 }
 
 UNACKED_ITERATOR = None
@@ -98,13 +99,13 @@ FAILED_TASKS = 0
 
 CURRENT_TASKS = {}
 
-MAX_CONCURRENT_TASKS = int(os.environ.get('MAX_CONCURRENT_TASKS', "5"))
-MAX_CONCURRENT_CHUNK_BUILDERS = int(os.environ.get('MAX_CONCURRENT_CHUNK_BUILDERS', "1"))
-MAX_CONCURRENT_MINIO = int(os.environ.get('MAX_CONCURRENT_MINIO', '10'))
+MAX_CONCURRENT_TASKS = int(os.environ.get("MAX_CONCURRENT_TASKS", "5"))
+MAX_CONCURRENT_CHUNK_BUILDERS = int(os.environ.get("MAX_CONCURRENT_CHUNK_BUILDERS", "1"))
+MAX_CONCURRENT_MINIO = int(os.environ.get("MAX_CONCURRENT_MINIO", "10"))
 task_limiter = trio.Semaphore(MAX_CONCURRENT_TASKS)
 chunk_limiter = trio.CapacityLimiter(MAX_CONCURRENT_CHUNK_BUILDERS)
 minio_limiter = trio.CapacityLimiter(MAX_CONCURRENT_MINIO)
-WORKER_HEARTBEAT_TIMEOUT = int(os.environ.get('WORKER_HEARTBEAT_TIMEOUT', '120'))
+WORKER_HEARTBEAT_TIMEOUT = int(os.environ.get("WORKER_HEARTBEAT_TIMEOUT", "120"))
 stop_event = threading.Event()
 
 
@@ -131,13 +132,16 @@ def start_tracemalloc_and_snapshot(signum, frame):
     snapshot.dump(snapshot_file)
     current, peak = tracemalloc.get_traced_memory()
     if sys.platform == "win32":
-        import  psutil
+        import psutil
+
         process = psutil.Process()
         max_rss = process.memory_info().rss / 1024
     else:
         import resource
+
         max_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     logging.info(f"taken snapshot {snapshot_file}. max RSS={max_rss / 1000:.2f} MB, current memory usage: {current / 10**6:.2f} MB, Peak memory usage: {peak / 10**6:.2f} MB")
+
 
 # SIGUSR2 handler: stop tracemalloc
 def stop_tracemalloc(signum, frame):
@@ -146,6 +150,7 @@ def stop_tracemalloc(signum, frame):
         tracemalloc.stop()
     else:
         logging.info("tracemalloc not running")
+
 
 class TaskCanceledException(Exception):
     def __init__(self, msg):
@@ -182,6 +187,7 @@ def set_progress(task_id, from_page=0, to_page=-1, prog=None, msg="Processing...
         logging.warning(f"set_progress({task_id}) got exception DoesNotExist")
     except Exception:
         logging.exception(f"set_progress({task_id}), progress: {prog}, progress_msg: {msg}, got exception")
+
 
 async def collect():
     global CONSUMER_NAME, DONE_TASKS, FAILED_TASKS
@@ -230,8 +236,7 @@ async def get_storage_binary(bucket, name):
 
 async def build_chunks(task, progress_callback):
     if task["size"] > DOC_MAXIMUM_SIZE:
-        set_progress(task["id"], prog=-1, msg="File size exceeds( <= %dMb )" %
-                                              (int(DOC_MAXIMUM_SIZE / 1024 / 1024)))
+        set_progress(task["id"], prog=-1, msg="File size exceeds( <= %dMb )" % (int(DOC_MAXIMUM_SIZE / 1024 / 1024)))
         return []
 
     chunker = FACTORY[task["parser_id"].lower()]
@@ -242,8 +247,7 @@ async def build_chunks(task, progress_callback):
         logging.info("From minio({}) {}/{}".format(timer() - st, task["location"], task["name"]))
     except TimeoutError:
         progress_callback(-1, "Internal server error: Fetch file from minio timeout. Could you try it again.")
-        logging.exception(
-            "Minio {}/{} got timeout: Fetch file from minio timeout.".format(task["location"], task["name"]))
+        logging.exception("Minio {}/{} got timeout: Fetch file from minio timeout.".format(task["location"], task["name"]))
         raise
     except Exception as e:
         if re.search("(No such file|not found)", str(e)):
@@ -255,9 +259,19 @@ async def build_chunks(task, progress_callback):
 
     try:
         async with chunk_limiter:
-            cks = await trio.to_thread.run_sync(lambda: chunker.chunk(task["name"], binary=binary, from_page=task["from_page"],
-                                to_page=task["to_page"], lang=task["language"], callback=progress_callback,
-                                kb_id=task["kb_id"], parser_config=task["parser_config"], tenant_id=task["tenant_id"]))
+            cks = await trio.to_thread.run_sync(
+                lambda: chunker.chunk(
+                    task["name"],
+                    binary=binary,
+                    from_page=task["from_page"],
+                    to_page=task["to_page"],
+                    lang=task["language"],
+                    callback=progress_callback,
+                    kb_id=task["kb_id"],
+                    parser_config=task["parser_config"],
+                    tenant_id=task["tenant_id"],
+                )
+            )
         logging.info("Chunking({}) {}/{} done".format(timer() - st, task["location"], task["name"]))
     except TaskCanceledException:
         raise
@@ -267,10 +281,7 @@ async def build_chunks(task, progress_callback):
         raise
 
     docs = []
-    doc = {
-        "doc_id": task["doc_id"],
-        "kb_id": str(task["kb_id"])
-    }
+    doc = {"doc_id": task["doc_id"], "kb_id": str(task["kb_id"])}
     if task["pagerank"]:
         doc[PAGERANK_FLD] = int(task["pagerank"])
     st = timer()
@@ -293,15 +304,14 @@ async def build_chunks(task, progress_callback):
                 if isinstance(d["image"], bytes):
                     output_buffer = BytesIO(d["image"])
                 else:
-                    d["image"].save(output_buffer, format='JPEG')
+                    d["image"].save(output_buffer, format="JPEG")
                 await trio.to_thread.run_sync(lambda: STORAGE_IMPL.put(task["kb_id"], d["id"], output_buffer.getvalue()))
 
                 d["img_id"] = "{}-{}".format(task["kb_id"], d["id"])
                 del d["image"]
                 docs.append(d)
         except Exception:
-            logging.exception(
-                "Saving image of chunk {}/{}/{} got exception".format(task["location"], task["name"], d["id"]))
+            logging.exception("Saving image of chunk {}/{}/{} got exception".format(task["location"], task["name"], d["id"]))
             raise
 
     async with trio.open_nursery() as nursery:
@@ -326,6 +336,7 @@ async def build_chunks(task, progress_callback):
                 d["important_kwd"] = cached.split(",")
                 d["important_tks"] = rag_tokenizer.tokenize(" ".join(d["important_kwd"]))
             return
+
         async with trio.open_nursery() as nursery:
             for d in docs:
                 nursery.start_soon(doc_keyword_extraction, chat_mdl, d, task["parser_config"]["auto_keywords"])
@@ -345,6 +356,7 @@ async def build_chunks(task, progress_callback):
             if cached:
                 d["question_kwd"] = cached.split("\n")
                 d["question_tks"] = rag_tokenizer.tokenize("\n".join(d["question_kwd"]))
+
         async with trio.open_nursery() as nursery:
             for d in docs:
                 nursery.start_soon(doc_question_proposal, chat_mdl, d, task["parser_config"]["auto_questions"])
@@ -377,9 +389,9 @@ async def build_chunks(task, progress_callback):
         async def doc_content_tagging(chat_mdl, d, topn_tags):
             cached = get_llm_cache(chat_mdl.llm_name, d["content_with_weight"], all_tags, {"topn": topn_tags})
             if not cached:
-                picked_examples = random.choices(examples, k=2) if len(examples)>2 else examples
+                picked_examples = random.choices(examples, k=2) if len(examples) > 2 else examples
                 if not picked_examples:
-                    picked_examples.append({"content": "This is an example", TAG_FLD: {'example': 1}})
+                    picked_examples.append({"content": "This is an example", TAG_FLD: {"example": 1}})
                 async with chat_limiter:
                     cached = await trio.to_thread.run_sync(lambda: content_tagging(chat_mdl, d["content_with_weight"], all_tags, picked_examples, topn=topn_tags))
                 if cached:
@@ -387,6 +399,7 @@ async def build_chunks(task, progress_callback):
             if cached:
                 set_llm_cache(chat_mdl.llm_name, d["content_with_weight"], cached, all_tags, {"topn": topn_tags})
                 d[TAG_FLD] = json.loads(cached)
+
         async with trio.open_nursery() as nursery:
             for d in docs_to_tag:
                 nursery.start_soon(doc_content_tagging, chat_mdl, d, topn_tags)
@@ -417,13 +430,13 @@ async def embedding(docs, mdl, parser_config=None, callback=None):
 
     tk_count = 0
     if len(tts) == len(cnts):
-        vts, c = await trio.to_thread.run_sync(lambda: mdl.encode(tts[0: 1]))
+        vts, c = await trio.to_thread.run_sync(lambda: mdl.encode(tts[0:1]))
         tts = np.concatenate([vts for _ in range(len(tts))], axis=0)
         tk_count += c
 
     cnts_ = np.array([])
     for i in range(0, len(cnts), batch_size):
-        vts, c = await trio.to_thread.run_sync(lambda: mdl.encode([truncate(c, mdl.max_length-10) for c in cnts[i: i + batch_size]]))
+        vts, c = await trio.to_thread.run_sync(lambda: mdl.encode([truncate(c, mdl.max_length - 10) for c in cnts[i : i + batch_size]]))
         if len(cnts_) == 0:
             cnts_ = vts
         else:
@@ -433,8 +446,7 @@ async def embedding(docs, mdl, parser_config=None, callback=None):
     cnts = cnts_
 
     title_w = float(parser_config.get("filename_embd_weight", 0.1))
-    vects = (title_w * tts + (1 - title_w) *
-             cnts) if len(tts) == len(cnts) else cnts
+    vects = (title_w * tts + (1 - title_w) * cnts) if len(tts) == len(cnts) else cnts
 
     assert len(vects) == len(docs)
     vector_size = 0
@@ -447,9 +459,8 @@ async def embedding(docs, mdl, parser_config=None, callback=None):
 
 async def run_raptor(row, chat_mdl, embd_mdl, vector_size, callback=None):
     chunks = []
-    vctr_nm = "q_%d_vec"%vector_size
-    for d in settings.retrievaler.chunk_list(row["doc_id"], row["tenant_id"], [str(row["kb_id"])],
-                                             fields=["content_with_weight", vctr_nm]):
+    vctr_nm = "q_%d_vec" % vector_size
+    for d in settings.retrievaler.chunk_list(row["doc_id"], row["tenant_id"], [str(row["kb_id"])], fields=["content_with_weight", vctr_nm]):
         chunks.append((d["content_with_weight"], np.array(d[vctr_nm])))
 
     raptor = Raptor(
@@ -458,16 +469,11 @@ async def run_raptor(row, chat_mdl, embd_mdl, vector_size, callback=None):
         embd_mdl,
         row["parser_config"]["raptor"]["prompt"],
         row["parser_config"]["raptor"]["max_token"],
-        row["parser_config"]["raptor"]["threshold"]
+        row["parser_config"]["raptor"]["threshold"],
     )
     original_length = len(chunks)
     chunks = await raptor(chunks, row["parser_config"]["raptor"]["random_seed"], callback)
-    doc = {
-        "doc_id": row["doc_id"],
-        "kb_id": [str(row["kb_id"])],
-        "docnm_kwd": row["name"],
-        "title_tks": rag_tokenizer.tokenize(row["name"])
-    }
+    doc = {"doc_id": row["doc_id"], "kb_id": [str(row["kb_id"])], "docnm_kwd": row["name"], "title_tks": rag_tokenizer.tokenize(row["name"])}
     if row["pagerank"]:
         doc[PAGERANK_FLD] = int(row["pagerank"])
     res = []
@@ -505,7 +511,7 @@ async def do_handle_task(task):
 
     # FIXME: workaround, Infinity doesn't support table parsing method, this check is to notify user
     lower_case_doc_engine = settings.DOC_ENGINE.lower()
-    if lower_case_doc_engine == 'infinity' and task['parser_id'].lower() == 'table':
+    if lower_case_doc_engine == "infinity" and task["parser_id"].lower() == "table":
         error_message = "Table parsing method is not supported by Infinity, please use other parsing methods or use Elasticsearch as the document engine."
         progress_callback(-1, msg=error_message)
         raise Exception(error_message)
@@ -521,7 +527,7 @@ async def do_handle_task(task):
         vts, _ = embedding_model.encode(["ok"])
         vector_size = len(vts[0])
     except Exception as e:
-        error_message = f'Fail to bind embedding model: {str(e)}'
+        error_message = f"Fail to bind embedding model: {str(e)}"
         progress_callback(-1, msg=error_message)
         logging.exception(error_message)
         raise
@@ -556,7 +562,7 @@ async def do_handle_task(task):
         if chunks is None:
             return
         if not chunks:
-            progress_callback(1., msg=f"No chunk built from {task_document_name}")
+            progress_callback(1.0, msg=f"No chunk built from {task_document_name}")
             return
         # TODO: exception handler
         ## set_progress(task["did"], -1, "ERROR: ")
@@ -579,14 +585,14 @@ async def do_handle_task(task):
     doc_store_result = ""
     es_bulk_size = 4
     for b in range(0, len(chunks), es_bulk_size):
-        doc_store_result = await trio.to_thread.run_sync(lambda: settings.docStoreConn.insert(chunks[b:b + es_bulk_size], search.index_name(task_tenant_id), task_dataset_id))
+        doc_store_result = await trio.to_thread.run_sync(lambda: settings.docStoreConn.insert(chunks[b : b + es_bulk_size], search.index_name(task_tenant_id), task_dataset_id))
         if b % 128 == 0:
             progress_callback(prog=0.8 + 0.1 * (b + 1) / len(chunks), msg="")
         if doc_store_result:
             error_message = f"Insert chunk error: {doc_store_result}, please check log file and Elasticsearch/Infinity status!"
             progress_callback(-1, msg=error_message)
             raise Exception(error_message)
-        chunk_ids = [chunk["id"] for chunk in chunks[:b + es_bulk_size]]
+        chunk_ids = [chunk["id"] for chunk in chunks[: b + es_bulk_size]]
         chunk_ids_str = " ".join(chunk_ids)
         try:
             TaskService.update_chunk_ids(task["id"], chunk_ids_str)
@@ -594,19 +600,14 @@ async def do_handle_task(task):
             logging.warning(f"do_handle_task update_chunk_ids failed since task {task['id']} is unknown.")
             doc_store_result = await trio.to_thread.run_sync(lambda: settings.docStoreConn.delete({"id": chunk_ids}, search.index_name(task_tenant_id), task_dataset_id))
             return
-    logging.info("Indexing doc({}), page({}-{}), chunks({}), elapsed: {:.2f}".format(task_document_name, task_from_page,
-                                                                                     task_to_page, len(chunks),
-                                                                                     timer() - start_ts))
+    logging.info("Indexing doc({}), page({}-{}), chunks({}), elapsed: {:.2f}".format(task_document_name, task_from_page, task_to_page, len(chunks), timer() - start_ts))
 
     DocumentService.increment_chunk_num(task_doc_id, task_dataset_id, token_count, chunk_count, 0)
 
     time_cost = timer() - start_ts
     task_time_cost = timer() - task_start_ts
     progress_callback(prog=1.0, msg="Indexing done ({:.2f}s). Task done ({:.2f}s)".format(time_cost, task_time_cost))
-    logging.info(
-        "Chunk doc({}), page({}-{}), chunks({}), token({}), elapsed:{:.2f}".format(task_document_name, task_from_page,
-                                                                                   task_to_page, len(chunks),
-                                                                                   token_count, task_time_cost))
+    logging.info("Chunk doc({}), page({}-{}), chunks({}), token({}), elapsed:{:.2f}".format(task_document_name, task_from_page, task_to_page, len(chunks), token_count, task_time_cost))
 
 
 async def handle_task():
@@ -629,7 +630,7 @@ async def handle_task():
             err_msg = str(e)
             while isinstance(e, exceptiongroup.ExceptionGroup):
                 e = e.exceptions[0]
-                err_msg += ' -- ' + str(e)
+                err_msg += " -- " + str(e)
             set_progress(task["id"], prog=-1, msg=f"[Exception]: {err_msg}")
         except Exception:
             pass
@@ -651,16 +652,18 @@ async def report_status():
                 LAG_TASKS = int(group_info.get("lag", 0))
 
             current = copy.deepcopy(CURRENT_TASKS)
-            heartbeat = json.dumps({
-                "name": CONSUMER_NAME,
-                "now": now.astimezone().isoformat(timespec="milliseconds"),
-                "boot_at": BOOT_AT,
-                "pending": PENDING_TASKS,
-                "lag": LAG_TASKS,
-                "done": DONE_TASKS,
-                "failed": FAILED_TASKS,
-                "current": current,
-            })
+            heartbeat = json.dumps(
+                {
+                    "name": CONSUMER_NAME,
+                    "now": now.astimezone().isoformat(timespec="milliseconds"),
+                    "boot_at": BOOT_AT,
+                    "pending": PENDING_TASKS,
+                    "lag": LAG_TASKS,
+                    "done": DONE_TASKS,
+                    "failed": FAILED_TASKS,
+                    "current": current,
+                }
+            )
             REDIS_CONN.zadd(CONSUMER_NAME, heartbeat, now.timestamp())
             logging.info(f"{CONSUMER_NAME} reported heartbeat: {heartbeat}")
 
@@ -674,9 +677,7 @@ async def report_status():
                 for consumer_name in task_executors:
                     if consumer_name == CONSUMER_NAME:
                         continue
-                    expired = REDIS_CONN.zcount(
-                        consumer_name, now.timestamp() - WORKER_HEARTBEAT_TIMEOUT, now.timestamp() + 10
-                    )
+                    expired = REDIS_CONN.zcount(consumer_name, now.timestamp() - WORKER_HEARTBEAT_TIMEOUT, now.timestamp() + 10)
                     if expired == 0:
                         logging.info(f"{consumer_name} expired, removed")
                         REDIS_CONN.srem("TASKEXE", consumer_name)
@@ -686,7 +687,7 @@ async def report_status():
         finally:
             redis_lock.release()
         await trio.sleep(60)
-        gc.collect() 
+        gc.collect()
 
 
 def recover_pending_tasks():
@@ -697,25 +698,23 @@ def recover_pending_tasks():
             if redis_lock.acquire():
                 for queue_name in svr_queue_names:
                     msgs = REDIS_CONN.get_pending_msg(queue=queue_name, group_name=SVR_CONSUMER_GROUP_NAME)
-                    msgs = [msg for msg in msgs if msg['consumer'] != CONSUMER_NAME]
+                    msgs = [msg for msg in msgs if msg["consumer"] != CONSUMER_NAME]
                     if len(msgs) == 0:
                         continue
 
                     task_executors = REDIS_CONN.smembers("TASKEXE")
                     task_executor_set = {t for t in task_executors}
-                    msgs = [msg for msg in msgs if msg['consumer'] not in task_executor_set]
+                    msgs = [msg for msg in msgs if msg["consumer"] not in task_executor_set]
                     for msg in msgs:
-                        logging.info(
-                            f"Recover pending task: {msg['message_id']}, consumer: {msg['consumer']}, "
-                            f"time since delivered: {msg['time_since_delivered'] / 1000} s"
-                        )
-                        REDIS_CONN.requeue_msg(queue_name, SVR_CONSUMER_GROUP_NAME, msg['message_id'])
+                        logging.info(f"Recover pending task: {msg['message_id']}, consumer: {msg['consumer']}, time since delivered: {msg['time_since_delivered'] / 1000} s")
+                        REDIS_CONN.requeue_msg(queue_name, SVR_CONSUMER_GROUP_NAME, msg["message_id"])
         except Exception:
             logging.warning("recover_pending_tasks got exception")
         finally:
             redis_lock.release()
             stop_event.wait(60)
-        
+
+
 async def task_manager():
     try:
         await handle_task()
@@ -731,13 +730,13 @@ async def main():
  / / / /_/ (__  ) ,<    / /____>  </  __/ /__/ /_/ / /_/ /_/ / /
 /_/  \__,_/____/_/|_|  /_____/_/|_|\___/\___/\__,_/\__/\____/_/
     """)
-    logging.info(f'TaskExecutor: RAGFlow version: {get_ragflow_version()}')
+    logging.info(f"TaskExecutor: RAGFlow version: {get_ragflow_version()}")
     settings.init_settings()
     print_rag_settings()
     if sys.platform != "win32":
         signal.signal(signal.SIGUSR1, start_tracemalloc_and_snapshot)
         signal.signal(signal.SIGUSR2, stop_tracemalloc)
-    TRACE_MALLOC_ENABLED = int(os.environ.get('TRACE_MALLOC_ENABLED', "0"))
+    TRACE_MALLOC_ENABLED = int(os.environ.get("TRACE_MALLOC_ENABLED", "0"))
     if TRACE_MALLOC_ENABLED:
         start_tracemalloc_and_snapshot(None, None)
 
@@ -752,6 +751,7 @@ async def main():
             await task_limiter.acquire()
             nursery.start_soon(task_manager)
     logging.error("BUG!!! You should not reach here!!!")
+
 
 if __name__ == "__main__":
     faulthandler.enable()

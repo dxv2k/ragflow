@@ -31,7 +31,7 @@ const LLMSelect = ({ id, value, onInitialValue, onChange, disabled }: IProps) =>
         }
       }
     }
-  }  
+  }
 
   const content = (
     <div style={{ width: 400 }}>

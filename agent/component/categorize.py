@@ -21,10 +21,10 @@ from agent.component import GenerateParam, Generate
 
 
 class CategorizeParam(GenerateParam):
-
     """
     Define the Categorize component parameters.
     """
+
     def __init__(self):
         super().__init__()
         self.category_description = {}
@@ -49,11 +49,10 @@ class CategorizeParam(GenerateParam):
         descriptions = []
         for c, desc in self.category_description.items():
             if desc.get("description"):
-                descriptions.append(
-                    "\nCategory: {}\nDescription: {}".format(c, desc["description"]))
+                descriptions.append("\nCategory: {}\nDescription: {}".format(c, desc["description"]))
 
         self.prompt = """
-Role: You're a text classifier. 
+Role: You're a text classifier.
 Task: You need to categorize the user’s questions into {} categories, namely: {}
 
 Here's description of each category:
@@ -68,13 +67,7 @@ Requirements:
 
 ---- Real Data ----
 USER: {}\n
-        """.format(
-            len(self.category_description.keys()),
-            "/".join(list(self.category_description.keys())),
-            "\n".join(descriptions),
-            "\n\n- ".join(cate_lines),
-            chat_hist
-        )
+        """.format(len(self.category_description.keys()), "/".join(list(self.category_description.keys())), "\n".join(descriptions), "\n\n- ".join(cate_lines), chat_hist)
         return self.prompt
 
 
@@ -85,17 +78,16 @@ class Categorize(Generate, ABC):
         input = self.get_input()
         input = " - ".join(input["content"]) if "content" in input else ""
         chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
-        self._canvas.set_component_infor(self._id, {"prompt":self._param.get_prompt(input),"messages":  [{"role": "user", "content": "\nCategory: "}],"conf": self._param.gen_conf()})
+        self._canvas.set_component_infor(self._id, {"prompt": self._param.get_prompt(input), "messages": [{"role": "user", "content": "\nCategory: "}], "conf": self._param.gen_conf()})
 
-        ans = chat_mdl.chat(self._param.get_prompt(input), [{"role": "user", "content": "\nCategory: "}],
-                            self._param.gen_conf())
-        logging.debug(f"input: {input}, answer: {str(ans)}")    
+        ans = chat_mdl.chat(self._param.get_prompt(input), [{"role": "user", "content": "\nCategory: "}], self._param.gen_conf())
+        logging.debug(f"input: {input}, answer: {str(ans)}")
         # Count the number of times each category appears in the answer.
         category_counts = {}
         for c in self._param.category_description.keys():
             count = ans.lower().count(c.lower())
             category_counts[c] = count
-            
+
         # If a category is found, return the category with the highest count.
         if any(category_counts.values()):
             max_category = max(category_counts.items(), key=lambda x: x[1])
@@ -107,4 +99,3 @@ class Categorize(Generate, ABC):
         df = self._run([], **kwargs)
         cpn_id = df.iloc[0, 0]
         return Categorize.be_output(self._canvas.get_component_name(cpn_id))
-

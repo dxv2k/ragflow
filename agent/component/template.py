@@ -95,9 +95,7 @@ class Template(ComponentBase):
 
             result = ""
             if "content" in out.columns:
-                result = "\n".join(
-                    [o if isinstance(o, str) else str(o) for o in out["content"]]
-                )
+                result = "\n".join([o if isinstance(o, str) else str(o) for o in out["content"]])
 
             self.make_kwargs(para, kwargs, result)
 
@@ -114,19 +112,13 @@ class Template(ComponentBase):
                     v = json.dumps(v, ensure_ascii=False)
                 except Exception:
                     pass
-            content = re.sub(
-                r"\{%s\}" % re.escape(n), v, content
-            )
-            content = re.sub(
-                r"(#+)", r" \1 ", content
-            )
+            content = re.sub(r"\{%s\}" % re.escape(n), v, content)
+            content = re.sub(r"(#+)", r" \1 ", content)
 
         return Template.be_output(content)
 
     def make_kwargs(self, para, kwargs, value):
-        self._param.inputs.append(
-            {"component_id": para["key"], "content": value}
-        )
+        self._param.inputs.append({"component_id": para["key"], "content": value})
         try:
             value = json.loads(value)
         except Exception:

@@ -4,7 +4,6 @@ Reference:
  - [LightRAG](https://github.com/HKUDS/LightRAG/blob/main/lightrag/prompt.py)
 """
 
-
 PROMPTS = {}
 
 PROMPTS["DEFAULT_LANGUAGE"] = "English"
@@ -128,14 +127,10 @@ Output:
 #############################""",
 ]
 
-PROMPTS[
-    "entiti_continue_extraction"
-] = """MANY entities were missed in the last extraction.  Add them below using the same format:
+PROMPTS["entiti_continue_extraction"] = """MANY entities were missed in the last extraction.  Add them below using the same format:
 """
 
-PROMPTS[
-    "entiti_if_loop_extraction"
-] = """It appears some entities may have still been missed.  Answer YES | NO if there are still entities that need to be added.
+PROMPTS["entiti_if_loop_extraction"] = """It appears some entities may have still been missed.  Answer YES | NO if there are still entities that need to be added.
 """
 
 PROMPTS["fail_response"] = "Sorry, I'm not able to provide an answer to that question."
@@ -195,9 +190,7 @@ When handling content with timestamps:
 Add sections and commentary to the response as appropriate for the length and format. Style the response in markdown.
 """
 
-PROMPTS[
-    "similarity_check"
-] = """Please analyze the similarity between these two questions:
+PROMPTS["similarity_check"] = """Please analyze the similarity between these two questions:
 
 Question 1: {original_prompt}
 Question 2: {cached_prompt}

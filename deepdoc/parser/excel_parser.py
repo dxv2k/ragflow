@@ -22,7 +22,6 @@ from rag.nlp import find_codec
 
 
 class RAGFlowExcelParser:
-
     @staticmethod
     def _load_excel_to_workbook(file_like_object):
         if isinstance(file_like_object, bytes):
@@ -33,7 +32,7 @@ class RAGFlowExcelParser:
         file_head = file_like_object.read(4)
         file_like_object.seek(0)
 
-        if not (file_head.startswith(b'PK\x03\x04') or file_head.startswith(b'\xD0\xCF\x11\xE0')):
+        if not (file_head.startswith(b"PK\x03\x04") or file_head.startswith(b"\xd0\xcf\x11\xe0")):
             logging.info("****wxy: Not an Excel file, converting CSV to Excel Workbook")
 
             try:
@@ -45,7 +44,7 @@ class RAGFlowExcelParser:
                 raise Exception(f"****wxy: Failed to parse CSV and convert to Excel Workbook: {e_csv}")
 
         try:
-            return load_workbook(file_like_object,data_only= True)
+            return load_workbook(file_like_object, data_only=True)
         except Exception as e:
             logging.info(f"****wxy: openpyxl load error: {e}, try pandas instead")
             try:
@@ -89,9 +88,7 @@ class RAGFlowExcelParser:
                 tb = ""
                 tb += f"<table><caption>{sheetname}</caption>"
                 tb += tb_rows_0
-                for r in list(
-                    rows[1 + chunk_i * chunk_rows: 1 + (chunk_i + 1) * chunk_rows]
-                ):
+                for r in list(rows[1 + chunk_i * chunk_rows : 1 + (chunk_i + 1) * chunk_rows]):
                     tb += "<tr>"
                     for i, c in enumerate(r):
                         if c.value is None:

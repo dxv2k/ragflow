@@ -243,7 +243,7 @@ export default {
       book: `<p>Supported file formats are <b>DOCX</b>, <b>PDF</b>, <b>TXT</b>.</p><p>
       For each book in PDF, please set the <i>page ranges</i> to remove unwanted information and reduce analysis time.</p>`,
       laws: `<p>Supported file formats are <b>DOCX</b>, <b>PDF</b>, <b>TXT</b>.</p><p>
-      Legal documents typically follow a rigorous writing format. We use text feature to identify split point. 
+      Legal documents typically follow a rigorous writing format. We use text feature to identify split point.
       </p><p>
       The chunk has a granularity consistent with 'ARTICLE', ensuring all upper level text is included in the chunk.
       </p>`,
@@ -257,7 +257,7 @@ export default {
       <li>Then, combine adjacent segments until the token count exceeds the threshold specified by 'Chunk token number for text', at which point a chunk is created.</li></p>`,
       paper: `<p>Only <b>PDF</b> file is supported.</p><p>
       Papers will be split by section, such as <i>abstract, 1.1, 1.2</i>. </p><p>
-      This approach enables the LLM to summarize the paper more effectively and to provide more comprehensive, understandable responses. 
+      This approach enables the LLM to summarize the paper more effectively and to provide more comprehensive, understandable responses.
       However, it also increases the context for AI conversations and adds to the computational cost for the LLM. So during a conversation, consider reducing the value of ‘<b>topN</b>’.</p>`,
       presentation: `<p>Supported file formats are <b>PDF</b>, <b>PPTX</b>.</p><p>
       Every page in the slides is treated as a chunk, with its thumbnail image stored.</p><p>

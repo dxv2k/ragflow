@@ -93,4 +93,3 @@ def parse_docs(auth, doc_ids):
 
 def parse_file(auth, document_id):
     pass
-

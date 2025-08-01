@@ -43,4 +43,3 @@ options:
 <div align="center" style="margin-top:20px;margin-bottom:20px;">
 <img src="https://github.com/infiniflow/ragflow/assets/12318111/0a731534-cac8-49fd-8a92-ca247eeef66d" width="600"/>
 </div>
-

@@ -52,8 +52,7 @@ class Document(Base):
         if "meta_fields" in update_message:
             if not isinstance(update_message["meta_fields"], dict):
                 raise Exception("meta_fields must be a dictionary")
-        res = self.put(f'/datasets/{self.dataset_id}/documents/{self.id}',
-                       update_message)
+        res = self.put(f"/datasets/{self.dataset_id}/documents/{self.id}", update_message)
         res = res.json()
         if res.get("code") != 0:
             raise Exception(res["message"])
@@ -66,9 +65,9 @@ class Document(Base):
         except json.JSONDecodeError:
             return res.content
 
-    def list_chunks(self, page=1, page_size=30, keywords="", id = ""):
+    def list_chunks(self, page=1, page_size=30, keywords="", id=""):
         data = {"keywords": keywords, "page": page, "page_size": page_size, "id": id}
-        res = self.get(f'/datasets/{self.dataset_id}/documents/{self.id}/chunks', data)
+        res = self.get(f"/datasets/{self.dataset_id}/documents/{self.id}/chunks", data)
         res = res.json()
         if res.get("code") == 0:
             chunks = []
@@ -79,8 +78,7 @@ class Document(Base):
         raise Exception(res.get("message"))
 
     def add_chunk(self, content: str, important_keywords: list[str] = [], questions: list[str] = []):
-        res = self.post(f'/datasets/{self.dataset_id}/documents/{self.id}/chunks',
-                        {"content": content, "important_keywords": important_keywords, "questions": questions})
+        res = self.post(f"/datasets/{self.dataset_id}/documents/{self.id}/chunks", {"content": content, "important_keywords": important_keywords, "questions": questions})
         res = res.json()
         if res.get("code") == 0:
             return Chunk(self.rag, res["data"].get("chunk"))

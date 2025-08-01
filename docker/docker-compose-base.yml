@@ -141,6 +141,9 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
       - TZ=${TIMEZONE}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     command:
       --max_connections=1000
       --character-set-server=utf8mb4

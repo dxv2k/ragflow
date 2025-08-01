@@ -35,14 +35,17 @@ class KeywordExtractParam(GenerateParam):
         self.check_positive_integer(self.top_n, "Top N")
 
     def get_prompt(self):
-        self.prompt = """
-- Role: You're a question analyzer. 
-- Requirements: 
+        self.prompt = (
+            """
+- Role: You're a question analyzer.
+- Requirements:
   - Summarize user's question, and give top %s important keyword/phrase.
   - Use comma as a delimiter to separate keywords/phrases.
 - Answer format: (in language of user's question)
-  - keyword: 
-""" % self.top_n
+  - keyword:
+"""
+            % self.top_n
+        )
         return self.prompt
 
 
@@ -56,12 +59,10 @@ class KeywordExtract(Generate, ABC):
         else:
             query = str(query)
 
-
         chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
-        self._canvas.set_component_infor(self._id, {"prompt":self._param.get_prompt(),"messages":  [{"role": "user", "content": query}],"conf": self._param.gen_conf()})
+        self._canvas.set_component_infor(self._id, {"prompt": self._param.get_prompt(), "messages": [{"role": "user", "content": query}], "conf": self._param.gen_conf()})
 
-        ans = chat_mdl.chat(self._param.get_prompt(), [{"role": "user", "content": query}],
-                            self._param.gen_conf())
+        ans = chat_mdl.chat(self._param.get_prompt(), [{"role": "user", "content": query}], self._param.gen_conf())
 
         ans = re.sub(r"^.*</think>", "", ans, flags=re.DOTALL)
         ans = re.sub(r".*keyword:", "", ans).strip()

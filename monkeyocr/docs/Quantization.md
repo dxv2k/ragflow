@@ -22,11 +22,11 @@
     #     model = vl_model.language_model
     # if hasattr(vl_model, 'llm'):  # MiniCPMV, ...
     #     model = vl_model.llm
-    ```    
+    ```
     You can use the following command to view the directory of the **lmdeploy** library:
-    ```bash    
+    ```bash
     python -c "import lmdeploy; import os; print(os.path.dirname(lmdeploy.__file__))"
-    ```    
+    ```
     The relative location of calibrte.py is in **lmdeploy/lite/apis/calibrate.py**
 
     Or you can download [tools/fix_qwen2_5_vl_awq.py](https://github.com/Yuliang-Liu/MonkeyOCR/blob/main/tools/fix_qwen2_5_vl_awq.py)
@@ -39,7 +39,7 @@
     ```bash
     python tools/fix_qwen2_5_vl_awq.py restore
     ```
-    
+
 4.  Enter the following in the terminal.
     ```bash
     lmdeploy lite auto_awq \

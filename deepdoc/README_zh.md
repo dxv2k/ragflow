@@ -56,7 +56,7 @@ export HF_ENDPOINT=https://hf-mirror.com
     ```
 
     输入可以是图像或PDF的目录，或者单个图像、PDF文件。您可以查看文件夹 `path_to_store_result` ，其中有演示结果位置的图像，以及包含OCR文本的txt文件。
-    
+
     <div align="center" style="margin-top:20px;margin-bottom:20px;">
     <img src="https://github.com/infiniflow/ragflow/assets/12318111/f25bee3d-aaf7-4102-baf5-d5208361d110" width="900"/>
     </div>
@@ -72,7 +72,7 @@ export HF_ENDPOINT=https://hf-mirror.com
       - 页尾
       - 参考引用
       - 公式
-      
+
      请尝试以下命令以查看布局检测结果。
 
     ```bash
@@ -83,14 +83,14 @@ export HF_ENDPOINT=https://hf-mirror.com
     <div align="center" style="margin-top:20px;margin-bottom:20px;">
     <img src="https://github.com/infiniflow/ragflow/assets/12318111/07e0f625-9b28-43d0-9fbb-5bf586cd286f" width="1000"/>
     </div>
-  
+
   - **TSR（Table Structure Recognition，表结构识别）**。数据表是一种常用的结构，用于表示包括数字或文本在内的数据。表的结构可能非常复杂，比如层次结构标题、跨单元格和投影行标题。除了TSR，我们还将内容重新组合成LLM可以很好理解的句子。TSR任务有五个标签：
       - 列
       - 行
       - 列标题
       - 行标题
       - 合并单元格
-      
+
     请尝试以下命令以查看布局检测结果。
 
     ```bash
@@ -102,7 +102,7 @@ export HF_ENDPOINT=https://hf-mirror.com
     <div align="center" style="margin-top:20px;margin-bottom:20px;">
     <img src="https://github.com/infiniflow/ragflow/assets/12318111/cb24e81b-f2ba-49f3-ac09-883d75606f4c" width="1000"/>
     </div>
-        
+
 <a name="3"></a>
 ## 3. 解析器
 
@@ -110,7 +110,7 @@ PDF、DOCX、EXCEL和PPT四种文档格式都有相应的解析器。最复杂�
   - 在PDF中有自己位置的文本块（页码和矩形位置）。
   - 带有PDF裁剪图像的表格，以及已经翻译成自然语言句子的内容。
   - 图中带标题和文字的图。
-  
+
 ### 简历
 
 简历是一种非常复杂的文档。由各种格式的非结构化文本构成的简历可以被解析为包含近百个字段的结构化数据。我们还没有启用解析器，因为在解析过程之后才会启动处理方法。

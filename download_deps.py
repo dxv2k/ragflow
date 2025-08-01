@@ -16,6 +16,7 @@ import os
 import urllib.request
 import argparse
 
+
 def get_urls(use_china_mirrors=False):
     if use_china_mirrors:
         return [
@@ -38,6 +39,7 @@ def get_urls(use_china_mirrors=False):
             "https://bit.ly/chromedriver-linux64-121-0-6167-85",
         ]
 
+
 repos = [
     "InfiniFlow/text_concat_xgb_v1.0",
     "InfiniFlow/deepdoc",
@@ -46,6 +48,7 @@ repos = [
     "maidalun1020/bce-embedding-base_v1",
 ]
 
+
 def download_model(repo_id):
     local_dir = os.path.abspath(os.path.join("huggingface.co", repo_id))
     os.makedirs(local_dir, exist_ok=True)
@@ -53,20 +56,20 @@ def download_model(repo_id):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Download dependencies with optional China mirror support')
-    parser.add_argument('--china-mirrors', action='store_true', help='Use China-accessible mirrors for downloads')
+    parser = argparse.ArgumentParser(description="Download dependencies with optional China mirror support")
+    parser.add_argument("--china-mirrors", action="store_true", help="Use China-accessible mirrors for downloads")
     args = parser.parse_args()
-    
+
     urls = get_urls(args.china_mirrors)
-    
+
     for url in urls:
         filename = url.split("/")[-1]
         print(f"Downloading {url}...")
         if not os.path.exists(filename):
             urllib.request.urlretrieve(url, filename)
 
-    local_dir = os.path.abspath('nltk_data')
-    for data in ['wordnet', 'punkt', 'punkt_tab']:
+    local_dir = os.path.abspath("nltk_data")
+    for data in ["wordnet", "punkt", "punkt_tab"]:
         print(f"Downloading nltk {data}...")
         nltk.download(data, download_dir=local_dir)
 

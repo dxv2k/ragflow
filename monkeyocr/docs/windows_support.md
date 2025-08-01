@@ -33,7 +33,7 @@ Then you can run MonkeyOCR normally.
 
 First, ensure your version of Windows supports WSL2.
 
-1.  Enable WSL.  
+1.  Enable WSL.
     Launch PowerShell with administrator privileges.
     * Enable the Virtual Machine Platform feature.
     ```PowerShell
@@ -50,10 +50,10 @@ First, ensure your version of Windows supports WSL2.
    wsl --install -d Ubuntu
    ```
 
-3.  Download Docker Desktop.  
+3.  Download Docker Desktop.
     [Official Docker Website](https://www.docker.com/products/docker-desktop/)
 
-4.  Configure WSL config (Optional).  
+4.  Configure WSL config (Optional).
 
     If you need to quantize the model later, you might encounter issues with insufficient memory.
 

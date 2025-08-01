@@ -1,13 +1,11 @@
-
 def join_path(*args):
-    return '/'.join(str(s).rstrip('/') for s in args)
+    return "/".join(str(s).rstrip("/") for s in args)
 
 
 def get_top_percent_list(num_list, percent):
     if len(num_list) == 0:
         top_percent_list = []
     else:
-
         sorted_imgs_len_list = sorted(num_list, reverse=True)
 
         top_percent_index = int(len(sorted_imgs_len_list) * percent)

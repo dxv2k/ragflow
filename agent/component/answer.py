@@ -24,10 +24,10 @@ from agent.component.base import ComponentBase, ComponentParamBase
 
 
 class AnswerParam(ComponentParamBase):
-
     """
     Define the Answer component parameters.
     """
+
     def __init__(self):
         super().__init__()
         self.post_answers = []
@@ -86,4 +86,3 @@ class Answer(ComponentBase, ABC):
                 return self._param.output_var_name, pd.DataFrame([{"content": c}])
 
         self._param.output_var_name, pd.DataFrame([])
-

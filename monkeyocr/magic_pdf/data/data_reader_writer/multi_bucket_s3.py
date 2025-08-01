@@ -1,10 +1,8 @@
-
 from magic_pdf.config.exceptions import InvalidConfig, InvalidParams
 from magic_pdf.data.data_reader_writer.base import DataReader, DataWriter
 from magic_pdf.data.io.s3 import S3Reader, S3Writer
 from magic_pdf.data.schemas import S3Config
-from magic_pdf.libs.path_utils import (parse_s3_range_params, parse_s3path,
-                                       remove_non_official_s3_args)
+from magic_pdf.libs.path_utils import parse_s3_range_params, parse_s3path, remove_non_official_s3_args
 
 
 class MultiS3Mixin:
@@ -21,11 +19,11 @@ class MultiS3Mixin:
             InvalidConfig: default bucket must be provided.
         """
         if len(default_prefix) == 0:
-            raise InvalidConfig('default_prefix must be provided')
+            raise InvalidConfig("default_prefix must be provided")
 
-        arr = default_prefix.strip('/').split('/')
+        arr = default_prefix.strip("/").split("/")
         self.default_bucket = arr[0]
-        self.default_prefix = '/'.join(arr[1:])
+        self.default_prefix = "/".join(arr[1:])
 
         found_default_bucket_config = False
         for conf in s3_configs:
@@ -34,15 +32,11 @@ class MultiS3Mixin:
                 break
 
         if not found_default_bucket_config:
-            raise InvalidConfig(
-                f'default_bucket: {self.default_bucket} config must be provided in s3_configs: {s3_configs}'
-            )
+            raise InvalidConfig(f"default_bucket: {self.default_bucket} config must be provided in s3_configs: {s3_configs}")
 
         uniq_bucket = set([conf.bucket_name for conf in s3_configs])
         if len(uniq_bucket) != len(s3_configs):
-            raise InvalidConfig(
-                f'the bucket_name in s3_configs: {s3_configs} must be unique'
-            )
+            raise InvalidConfig(f"the bucket_name in s3_configs: {s3_configs} must be unique")
 
         self.s3_configs = s3_configs
         self._s3_clients_h: dict = {}
@@ -70,13 +64,9 @@ class MultiBucketS3DataReader(DataReader, MultiS3Mixin):
 
     def __get_s3_client(self, bucket_name: str):
         if bucket_name not in set([conf.bucket_name for conf in self.s3_configs]):
-            raise InvalidParams(
-                f'bucket name: {bucket_name} not found in s3_configs: {self.s3_configs}'
-            )
+            raise InvalidParams(f"bucket name: {bucket_name} not found in s3_configs: {self.s3_configs}")
         if bucket_name not in self._s3_clients_h:
-            conf = next(
-                filter(lambda conf: conf.bucket_name == bucket_name, self.s3_configs)
-            )
+            conf = next(filter(lambda conf: conf.bucket_name == bucket_name, self.s3_configs))
             self._s3_clients_h[bucket_name] = S3Reader(
                 bucket_name,
                 conf.access_key,
@@ -98,26 +88,22 @@ class MultiBucketS3DataReader(DataReader, MultiS3Mixin):
         Returns:
             bytes: the file content.
         """
-        if path.startswith('s3://'):
+        if path.startswith("s3://"):
             bucket_name, path = parse_s3path(path)
             s3_reader = self.__get_s3_client(bucket_name)
         else:
             s3_reader = self.__get_s3_client(self.default_bucket)
             if self.default_prefix:
-                path = self.default_prefix + '/' + path
+                path = self.default_prefix + "/" + path
         return s3_reader.read_at(path, offset, limit)
 
 
 class MultiBucketS3DataWriter(DataWriter, MultiS3Mixin):
     def __get_s3_client(self, bucket_name: str):
         if bucket_name not in set([conf.bucket_name for conf in self.s3_configs]):
-            raise InvalidParams(
-                f'bucket name: {bucket_name} not found in s3_configs: {self.s3_configs}'
-            )
+            raise InvalidParams(f"bucket name: {bucket_name} not found in s3_configs: {self.s3_configs}")
         if bucket_name not in self._s3_clients_h:
-            conf = next(
-                filter(lambda conf: conf.bucket_name == bucket_name, self.s3_configs)
-            )
+            conf = next(filter(lambda conf: conf.bucket_name == bucket_name, self.s3_configs))
             self._s3_clients_h[bucket_name] = S3Writer(
                 bucket_name,
                 conf.access_key,
@@ -135,11 +121,11 @@ class MultiBucketS3DataWriter(DataWriter, MultiS3Mixin):
             path (str): the path of file, if the path is relative path, it will be joined with parent_dir.
             data (bytes): the data want to write.
         """
-        if path.startswith('s3://'):
+        if path.startswith("s3://"):
             bucket_name, path = parse_s3path(path)
             s3_writer = self.__get_s3_client(bucket_name)
         else:
             s3_writer = self.__get_s3_client(self.default_bucket)
             if self.default_prefix:
-                path = self.default_prefix + '/' + path
+                path = self.default_prefix + "/" + path
         return s3_writer.write(path, data)

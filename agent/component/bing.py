@@ -19,6 +19,7 @@ import requests
 import pandas as pd
 from agent.component.base import ComponentBase, ComponentParamBase
 
+
 class BingParam(ComponentParamBase):
     """
     Define the Bing component parameters.
@@ -36,15 +37,104 @@ class BingParam(ComponentParamBase):
         self.check_positive_integer(self.top_n, "Top N")
         self.check_valid_value(self.channel, "Bing Web Search or Bing News", ["Webpages", "News"])
         self.check_empty(self.api_key, "Bing subscription key")
-        self.check_valid_value(self.country, "Bing Country",
-                               ['AR', 'AU', 'AT', 'BE', 'BR', 'CA', 'CL', 'DK', 'FI', 'FR', 'DE', 'HK', 'IN', 'ID',
-                                'IT', 'JP', 'KR', 'MY', 'MX', 'NL', 'NZ', 'NO', 'CN', 'PL', 'PT', 'PH', 'RU', 'SA',
-                                'ZA', 'ES', 'SE', 'CH', 'TW', 'TR', 'GB', 'US'])
-        self.check_valid_value(self.language, "Bing Languages",
-                               ['ar', 'eu', 'bn', 'bg', 'ca', 'ns', 'nt', 'hr', 'cs', 'da', 'nl', 'en', 'gb', 'et',
-                                'fi', 'fr', 'gl', 'de', 'gu', 'he', 'hi', 'hu', 'is', 'it', 'jp', 'kn', 'ko', 'lv',
-                                'lt', 'ms', 'ml', 'mr', 'nb', 'pl', 'br', 'pt', 'pa', 'ro', 'ru', 'sr', 'sk', 'sl',
-                                'es', 'sv', 'ta', 'te', 'th', 'tr', 'uk', 'vi'])
+        self.check_valid_value(
+            self.country,
+            "Bing Country",
+            [
+                "AR",
+                "AU",
+                "AT",
+                "BE",
+                "BR",
+                "CA",
+                "CL",
+                "DK",
+                "FI",
+                "FR",
+                "DE",
+                "HK",
+                "IN",
+                "ID",
+                "IT",
+                "JP",
+                "KR",
+                "MY",
+                "MX",
+                "NL",
+                "NZ",
+                "NO",
+                "CN",
+                "PL",
+                "PT",
+                "PH",
+                "RU",
+                "SA",
+                "ZA",
+                "ES",
+                "SE",
+                "CH",
+                "TW",
+                "TR",
+                "GB",
+                "US",
+            ],
+        )
+        self.check_valid_value(
+            self.language,
+            "Bing Languages",
+            [
+                "ar",
+                "eu",
+                "bn",
+                "bg",
+                "ca",
+                "ns",
+                "nt",
+                "hr",
+                "cs",
+                "da",
+                "nl",
+                "en",
+                "gb",
+                "et",
+                "fi",
+                "fr",
+                "gl",
+                "de",
+                "gu",
+                "he",
+                "hi",
+                "hu",
+                "is",
+                "it",
+                "jp",
+                "kn",
+                "ko",
+                "lv",
+                "lt",
+                "ms",
+                "ml",
+                "mr",
+                "nb",
+                "pl",
+                "br",
+                "pt",
+                "pa",
+                "ro",
+                "ru",
+                "sr",
+                "sk",
+                "sl",
+                "es",
+                "sv",
+                "ta",
+                "te",
+                "th",
+                "tr",
+                "uk",
+                "vi",
+            ],
+        )
 
 
 class Bing(ComponentBase, ABC):
@@ -57,22 +147,18 @@ class Bing(ComponentBase, ABC):
             return Bing.be_output("")
 
         try:
-            headers = {"Ocp-Apim-Subscription-Key": self._param.api_key, 'Accept-Language': self._param.language}
-            params = {"q": ans, "textDecorations": True, "textFormat": "HTML", "cc": self._param.country,
-                      "answerCount": 1, "promote": self._param.channel}
+            headers = {"Ocp-Apim-Subscription-Key": self._param.api_key, "Accept-Language": self._param.language}
+            params = {"q": ans, "textDecorations": True, "textFormat": "HTML", "cc": self._param.country, "answerCount": 1, "promote": self._param.channel}
             if self._param.channel == "Webpages":
                 response = requests.get("https://api.bing.microsoft.com/v7.0/search", headers=headers, params=params)
                 response.raise_for_status()
                 search_results = response.json()
-                bing_res = [{"content": '<a href="' + i["url"] + '">' + i["name"] + '</a>    ' + i["snippet"]} for i in
-                            search_results["webPages"]["value"]]
+                bing_res = [{"content": '<a href="' + i["url"] + '">' + i["name"] + "</a>    " + i["snippet"]} for i in search_results["webPages"]["value"]]
             elif self._param.channel == "News":
-                response = requests.get("https://api.bing.microsoft.com/v7.0/news/search", headers=headers,
-                                        params=params)
+                response = requests.get("https://api.bing.microsoft.com/v7.0/news/search", headers=headers, params=params)
                 response.raise_for_status()
                 search_results = response.json()
-                bing_res = [{"content": '<a href="' + i["url"] + '">' + i["name"] + '</a>    ' + i["description"]} for i
-                            in search_results['news']['value']]
+                bing_res = [{"content": '<a href="' + i["url"] + '">' + i["name"] + "</a>    " + i["description"]} for i in search_results["news"]["value"]]
         except Exception as e:
             return Bing.be_output("**ERROR**: " + str(e))
 

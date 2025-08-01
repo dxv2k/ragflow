@@ -58,7 +58,6 @@ def split_projection_profile(arr_values: np.array, min_value: float, min_gap: fl
 
 
 def recursive_xy_cut(boxes: np.ndarray, indices: List[int], res: List[int]):
-
     assert len(boxes) == len(indices)
 
     _indices = boxes[:, 1].argsort()
@@ -74,7 +73,6 @@ def recursive_xy_cut(boxes: np.ndarray, indices: List[int], res: List[int]):
 
     arr_y0, arr_y1 = pos_y
     for r0, r1 in zip(arr_y0, arr_y1):
-
         _indices = (r0 <= y_sorted_boxes[:, 1]) & (y_sorted_boxes[:, 1] < r1)
 
         y_sorted_boxes_chunk = y_sorted_boxes[_indices]
@@ -84,7 +82,6 @@ def recursive_xy_cut(boxes: np.ndarray, indices: List[int], res: List[int]):
         x_sorted_boxes_chunk = y_sorted_boxes_chunk[_indices]
         x_sorted_indices_chunk = y_sorted_indices_chunk[_indices]
 
-
         x_projection = projection_by_bboxes(boxes=x_sorted_boxes_chunk, axis=0)
         pos_x = split_projection_profile(x_projection, 0, 1)
         if not pos_x:
@@ -92,18 +89,12 @@ def recursive_xy_cut(boxes: np.ndarray, indices: List[int], res: List[int]):
 
         arr_x0, arr_x1 = pos_x
         if len(arr_x0) == 1:
-
             res.extend(x_sorted_indices_chunk)
             continue
 
-
         for c0, c1 in zip(arr_x0, arr_x1):
-            _indices = (c0 <= x_sorted_boxes_chunk[:, 0]) & (
-                x_sorted_boxes_chunk[:, 0] < c1
-            )
-            recursive_xy_cut(
-                x_sorted_boxes_chunk[_indices], x_sorted_indices_chunk[_indices], res
-            )
+            _indices = (c0 <= x_sorted_boxes_chunk[:, 0]) & (x_sorted_boxes_chunk[:, 0] < c1)
+            recursive_xy_cut(x_sorted_boxes_chunk[_indices], x_sorted_indices_chunk[_indices], res)
 
 
 def points_to_bbox(points):
@@ -166,9 +157,7 @@ def vis_polygon(img, points, thickness=2, color=None):
     return img
 
 
-def vis_points(
-    img: np.ndarray, points, texts: List[str] = None, color=(0, 200, 0)
-) -> np.ndarray:
+def vis_points(img: np.ndarray, points, texts: List[str] = None, color=(0, 200, 0)) -> np.ndarray:
     """
 
     Args:

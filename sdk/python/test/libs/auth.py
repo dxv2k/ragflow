@@ -21,5 +21,5 @@ class RAGFlowHttpApiAuth(AuthBase):
         self._token = token
 
     def __call__(self, r):
-        r.headers["Authorization"] = f'Bearer {self._token}'
+        r.headers["Authorization"] = f"Bearer {self._token}"
         return r

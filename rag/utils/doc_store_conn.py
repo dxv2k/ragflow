@@ -129,17 +129,22 @@ class FusionExpr(ABC):
 
 MatchExpr = MatchTextExpr | MatchDenseExpr | MatchSparseExpr | MatchTensorExpr | FusionExpr
 
+
 class OrderByExpr(ABC):
     def __init__(self):
         self.fields = list()
+
     def asc(self, field: str):
         self.fields.append((field, 0))
         return self
+
     def desc(self, field: str):
         self.fields.append((field, 1))
         return self
+
     def fields(self):
         return self.fields
+
 
 class DocStoreConnection(ABC):
     """
@@ -191,17 +196,18 @@ class DocStoreConnection(ABC):
 
     @abstractmethod
     def search(
-        self, selectFields: list[str],
-            highlightFields: list[str],
-            condition: dict,
-            matchExprs: list[MatchExpr],
-            orderBy: OrderByExpr,
-            offset: int,
-            limit: int,
-            indexNames: str|list[str],
-            knowledgebaseIds: list[str],
-            aggFields: list[str] = [],
-            rank_feature: dict | None = None
+        self,
+        selectFields: list[str],
+        highlightFields: list[str],
+        condition: dict,
+        matchExprs: list[MatchExpr],
+        orderBy: OrderByExpr,
+        offset: int,
+        limit: int,
+        indexNames: str | list[str],
+        knowledgebaseIds: list[str],
+        aggFields: list[str] = [],
+        rank_feature: dict | None = None,
     ):
         """
         Search with given conjunctive equivalent filtering condition and return all fields of matched documents
@@ -263,6 +269,7 @@ class DocStoreConnection(ABC):
     """
     SQL
     """
+
     @abstractmethod
     def sql(sql: str, fetch_size: int, format: str):
         """

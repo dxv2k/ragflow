@@ -52,7 +52,7 @@ from imutils import contours as imutils_contours
 def save_visualization(image, filename, output_dir="visualization_output"):
     """
     Save visualization image to output directory.
-    
+
     Args:
         image: Image to save
         filename: Name of the file
@@ -60,11 +60,11 @@ def save_visualization(image, filename, output_dir="visualization_output"):
     """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Save image
     output_path = os.path.join(output_dir, filename)
     cv2.imwrite(output_path, image)
-    #print(f"💾 Saved visualization: {output_path}")
+    # print(f"💾 Saved visualization: {output_path}")
 
 
 def visualize_threshold_and_detection(image_path, imgThresh, circleContours, ratingRows, ratings, cropped_image_path=None):
@@ -91,18 +91,17 @@ def visualize_threshold_and_detection(image_path, imgThresh, circleContours, rat
     original = cv2.resize(original, (imgThresh.shape[1], imgThresh.shape[0]))
 
     base_filename = Path(image_path).stem
-    
+
     # 1. THRESHOLD IMAGE VISUALIZATION
     threshold_vis = cv2.cvtColor(imgThresh, cv2.COLOR_GRAY2BGR)
     save_visualization(threshold_vis, f"{base_filename}_threshold.jpg")
-    
+
     # 2. CIRCLE DETECTION VISUALIZATION
     detection_vis = original.copy()
     cv2.drawContours(detection_vis, circleContours, -1, (0, 255, 0), 2)  # Green circles
-    cv2.putText(detection_vis, f"Detected Circles: {len(circleContours)}", 
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+    cv2.putText(detection_vis, f"Detected Circles: {len(circleContours)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     save_visualization(detection_vis, f"{base_filename}_detection.jpg")
-    
+
     # 3. RATING ROWS VISUALIZATION
     rows_vis = original.copy()
     colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]  # BGR colors
@@ -114,12 +113,10 @@ def visualize_threshold_and_detection(image_path, imgThresh, circleContours, rat
             if M["m00"] != 0:
                 cx = int(M["m10"] / M["m00"])
                 cy = int(M["m01"] / M["m00"])
-                cv2.putText(rows_vis, str(circle_idx + 1), (cx-5, cy+5), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-    cv2.putText(rows_vis, f"Rating Rows: {len(ratingRows)}", 
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                cv2.putText(rows_vis, str(circle_idx + 1), (cx - 5, cy + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+    cv2.putText(rows_vis, f"Rating Rows: {len(ratingRows)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
     save_visualization(rows_vis, f"{base_filename}_rating_rows.jpg")
-    
+
     # 4. FINAL RESULTS VISUALIZATION
     results_vis = original.copy()
     for row_idx, (row, rating) in enumerate(zip(ratingRows, ratings)):
@@ -132,15 +129,13 @@ def visualize_threshold_and_detection(image_path, imgThresh, circleContours, rat
                 if M["m00"] != 0:
                     cx = int(M["m10"] / M["m00"])
                     cy = int(M["m01"] / M["m00"])
-                    cv2.putText(results_vis, f"R{rating}", (cx-10, cy+5), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                    cv2.putText(results_vis, f"R{rating}", (cx - 10, cy + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             else:
                 cv2.drawContours(results_vis, [circle], 0, color, 2)
     ratings_text = f"Ratings: {ratings}"
-    cv2.putText(results_vis, ratings_text, (10, 30), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.putText(results_vis, ratings_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
     save_visualization(results_vis, f"{base_filename}_final_results.jpg")
-    
+
     # 5. MASK VISUALIZATION (for first row as example)
     if ratingRows and len(ratingRows) > 0:
         masks_vis = original.copy()
@@ -156,10 +151,8 @@ def visualize_threshold_and_detection(image_path, imgThresh, circleContours, rat
             if M["m00"] != 0:
                 cx = int(M["m10"] / M["m00"])
                 cy = int(M["m01"] / M["m00"])
-                cv2.putText(masks_vis, f"P:{pixel_count}", (cx-15, cy+5), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-        cv2.putText(masks_vis, "Pixl Counets (First Row)", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                cv2.putText(masks_vis, f"P:{pixel_count}", (cx - 15, cy + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+        cv2.putText(masks_vis, "Pixl Counets (First Row)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         save_visualization(masks_vis, f"{base_filename}_pixel_counts.jpg")
 
     # 6. MASK OVERLAY VISUALIZATION (filled circles)
@@ -169,13 +162,13 @@ def visualize_threshold_and_detection(image_path, imgThresh, circleContours, rat
         alpha = 0.4
         for row, rating in zip(ratingRows, ratings):
             if rating > 0:
-                filled_circle = row[rating-1]
+                filled_circle = row[rating - 1]
                 mask = np.zeros(overlay_img.shape[:2], np.uint8)
                 cv2.drawContours(mask, [filled_circle], 0, 255, -1)
                 colored_mask = np.zeros_like(overlay_img)
                 colored_mask[:, :] = mask_color
                 overlay_img = np.where(mask[..., None] == 255, (alpha * colored_mask + (1 - alpha) * overlay_img).astype(np.uint8), overlay_img)
-        mask_overlay_path = os.path.join('visualization_output', f'{base_filename}_mask_overlay.jpg')
+        mask_overlay_path = os.path.join("visualization_output", f"{base_filename}_mask_overlay.jpg")
         cv2.imwrite(mask_overlay_path, overlay_img)
         print(f"💾 Saved mask overlay: {mask_overlay_path}")
 
@@ -183,25 +176,25 @@ def visualize_threshold_and_detection(image_path, imgThresh, circleContours, rat
 def classify_image(image_path):
     """
     Classify image as multiple choice form or text/handwriting using robust circle detection.
-    
+
     ALGORITHM:
     1. Hough Circle Transform: Detects circles using gradient-based approach
     2. Pattern Analysis: Checks if circles are arranged in regular grid (rows/columns)
     3. Contour Analysis: Calculates circularity of all contours to distinguish shapes
     4. Multi-criteria Classification: Combines all factors for final decision
-    
+
     MATHEMATICAL FORMULAS:
     - Circularity = 4π * area / perimeter²
     - Grid pattern detection: Groups coordinates with tolerance-based clustering
-    
+
     CLASSIFICATION CRITERIA:
     - At least 3 Hough circles detected (but not more than 50 to avoid noise)
     - Circles arranged in regular grid pattern (multiple rows/columns)
     - More circular contours than text-like contours
     - Minimum 3 circular contours found
-    
+
     PARAMETER SELECTION DETAILS:
-    
+
     GAUSSIAN BLUR PARAMETERS:
     - Kernel size (9,9): Chosen because:
       * Larger than typical noise (3x3, 5x5) to effectively smooth noise
@@ -212,35 +205,35 @@ def classify_image(image_path):
       * Provides sufficient smoothing without over-blurring
       * Maintains circle boundary sharpness for Hough transform
       * Empirical testing showed best circle detection accuracy
-    
+
     HOUGH CIRCLE TRANSFORM PARAMETERS:
     - dp=1: Inverse ratio of accumulator resolution to image resolution
       * dp=1 means full resolution (most accurate but slower)
       * dp=2 would be faster but less accurate for small circles
       * Chosen for maximum accuracy in circle detection
-    
+
     - minDist=20: Minimum distance between detected circles
       * Based on typical spacing between rating circles (15-25 pixels)
       * Prevents multiple detections of same circle
       * Accounts for slight circle overlap or touching
-    
+
     - param1=50: Upper threshold for edge detection (Canny edge detector)
       * Lower values detect more edges but include noise
       * Higher values miss weak circle edges
       * 50 provides optimal edge detection for circle boundaries
       * Empirical testing with various image qualities confirmed this value
-    
+
     - param2=30: Threshold for center detection
       * Lower values detect more circles (including false positives)
       * Higher values miss actual circles
       * 30 balances sensitivity and specificity
       * Testing showed this catches 95% of actual circles while rejecting 80% of false positives
-    
+
     - minRadius=5, maxRadius=50: Range of circle sizes to detect
       * minRadius=5: Filters out noise and very small artifacts
       * maxRadius=50: Covers typical rating circle sizes (10-40 pixels)
       * Based on analysis of multiple choice form circle sizes
-    
+
     GRID PATTERN DETECTION PARAMETERS:
     - Tolerance values (10 pixels): Chosen because:
       * Accounts for slight misalignments in printed forms
@@ -248,13 +241,13 @@ def classify_image(image_path):
       * Large enough to group circles in same row/column
       * Small enough to distinguish different rows/columns
       * Based on typical circle spacing and alignment variations
-    
+
     CONTOUR ANALYSIS PARAMETERS:
     - Minimum area threshold (50 pixels): Selected because:
       * Filters out noise and very small artifacts
       * Preserves actual rating circles (typically 100-400 pixels)
       * Empirical testing showed this eliminates 90% of noise while keeping all valid circles
-    
+
     - Circularity thresholds:
       * Circular contours: >0.7 circularity AND ≥8 polygon points
         - 0.7 threshold: Perfect circle=1.0, but real circles have slight imperfections
@@ -263,26 +256,26 @@ def classify_image(image_path):
       * Text contours: ≤6 points OR <0.3 circularity
         - ≤6 points: Text characters are simpler shapes (rectangles, lines)
         - <0.3 circularity: Text has very low circularity due to angular shapes
-    
+
     - Polygon approximation epsilon (0.02): Chosen because:
       * 2% accuracy provides good shape approximation
       * Preserves circle characteristics while simplifying analysis
       * Balances accuracy with processing speed
-    
+
     CLASSIFICATION THRESHOLDS:
     - Valid circles: 3-50 range
       * Minimum 3: Ensures multiple choice form has multiple options
       * Maximum 50: Prevents text/handwriting from being misclassified
       * Based on typical multiple choice form characteristics (5-25 circles)
-    
+
     - Circular vs text contour ratio: More circular than text
       * Multiple choice forms should have predominantly circular shapes
       * Text/handwriting creates mostly rectangular or irregular contours
       * This ratio provides strong discrimination between form types
-    
+
     Args:
         image_path (str): Path to the image file
-        
+
     Returns:
         str: 'multiple_choice' or 'text_handwriting'
     """
@@ -290,17 +283,17 @@ def classify_image(image_path):
     image = cv2.imread(image_path)
     if image is None:
         print(f"Error: Could not read image {image_path}")
-        return 'unknown'
-    
+        return "unknown"
+
     # Convert to grayscale for processing
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
+
     # Apply Gaussian blur to reduce noise and improve circle detection
     # Kernel size (9,9) with sigma=2 provides good balance between noise reduction and detail preservation
     # REASONING: 9x9 kernel is large enough to smooth noise but small enough to preserve circle edges
     # Sigma=2 provides sufficient smoothing without over-blurring circle boundaries
     blurred = cv2.GaussianBlur(gray, (9, 9), 2)
-    
+
     # HOUGH CIRCLE TRANSFORM ALGORITHM:
     # Uses gradient information to detect circles in the image
     # Parameters:
@@ -314,18 +307,18 @@ def classify_image(image_path):
         cv2.HOUGH_GRADIENT,
         dp=1,
         minDist=20,  # Minimum distance between circles
-        param1=50,   # Upper threshold for edge detection
-        param2=30,   # Threshold for center detection
+        param1=50,  # Upper threshold for edge detection
+        param2=30,  # Threshold for center detection
         minRadius=5,  # Minimum circle radius
-        maxRadius=50  # Maximum circle radius
+        maxRadius=50,  # Maximum circle radius
     )
-    
+
     # Count valid circles detected by Hough transform
     valid_circles = 0
     if circles is not None:
         circles = np.round(circles[0, :]).astype("int")
         valid_circles = len(circles)
-    
+
     # PATTERN ANALYSIS ALGORITHM:
     # Multiple choice forms typically have circles arranged in regular grid patterns
     # This checks if detected circles form rows and columns
@@ -335,53 +328,53 @@ def classify_image(image_path):
         if circles is not None:
             x_coords = circles[:, 0]  # X coordinates of circle centers
             y_coords = circles[:, 1]  # Y coordinates of circle centers
-            
+
             # HORIZONTAL ALIGNMENT DETECTION:
             # Groups circles with similar Y-coordinates (same row)
             # Uses tolerance-based clustering to account for slight misalignments
             y_tolerance = 10  # Pixels tolerance for same row
             unique_y = np.unique(np.round(y_coords / y_tolerance) * y_tolerance)
-            
+
             # VERTICAL ALIGNMENT DETECTION:
             # Groups circles with similar X-coordinates (same column)
             x_tolerance = 10  # Pixels tolerance for same column
             unique_x = np.unique(np.round(x_coords / x_tolerance) * x_tolerance)
-            
+
             # GRID PATTERN VALIDATION:
             # Multiple choice forms should have both multiple rows and columns
             if len(unique_y) >= 2 and len(unique_x) >= 2:
                 has_regular_pattern = True
-    
+
     # CONTOUR ANALYSIS ALGORITHM:
     # Analyzes all contours in the image to distinguish between circular and text shapes
     # Uses mathematical circularity measurement
     _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
+
     # Analyze contour properties
     circular_contours = 0
     text_contours = 0
-    
+
     for contour in contours:
         if cv2.contourArea(contour) < 50:  # Skip very small contours (noise)
             continue
-            
+
         # Calculate contour properties
         area = cv2.contourArea(contour)
         perimeter = cv2.arcLength(contour, True)
-        
+
         if perimeter > 0:
             # CIRCULARITY CALCULATION:
             # Circularity = 4π * area / perimeter²
             # Perfect circle has circularity = 1.0
             # Irregular shapes have lower circularity values
             circularity = 4 * np.pi * area / (perimeter * perimeter)
-            
+
             # POLYGON APPROXIMATION:
             # Approximates contour to polygon to analyze shape complexity
             epsilon = 0.02 * perimeter  # Approximation accuracy
             approx = cv2.approxPolyDP(contour, epsilon, True)
-            
+
             # SHAPE CLASSIFICATION:
             # Circles: High circularity (>0.7) and many polygon points (≥8)
             # Text: Low circularity (<0.3) or few polygon points (≤6)
@@ -389,39 +382,39 @@ def classify_image(image_path):
                 circular_contours += 1
             elif len(approx) <= 6 or circularity < 0.3:
                 text_contours += 1
-    
+
     # CLASSIFICATION DECISION LOGIC:
     # Combines all analysis results for final classification
     # Multiple choice forms should satisfy ALL criteria:
     is_multiple_choice = (
-        valid_circles >= 3 and  # At least 3 circles detected by Hough transform
-        valid_circles <= 50 and  # Not too many circles (avoids text noise)
-        has_regular_pattern and  # Circles arranged in regular grid pattern
-        circular_contours > text_contours and  # More circular than text contours
-        circular_contours >= 3  # At least 3 circular contours found
+        valid_circles >= 3  # At least 3 circles detected by Hough transform
+        and valid_circles <= 50  # Not too many circles (avoids text noise)
+        and has_regular_pattern  # Circles arranged in regular grid pattern
+        and circular_contours > text_contours  # More circular than text contours
+        and circular_contours >= 3  # At least 3 circular contours found
     )
-    
-    return 'multiple_choice' if is_multiple_choice else 'text_handwriting'
+
+    return "multiple_choice" if is_multiple_choice else "text_handwriting"
 
 
 def extract_rating_answers_from_cropped_image(image_path, save_visualizations=False):
     """
     Extract 5-point rating scale answers from a cropped image section.
     Works with images that only contain rating circles without document boundaries.
-    
+
     ALGORITHM:
     1. Image Preprocessing: Resize, grayscale, blur, threshold
     2. Circle Detection: Find contours and filter for circular shapes
     3. Pattern Organization: Sort circles top-to-bottom, group into rows
     4. Answer Extraction: Analyze pixel density within each circle
-    
+
     MATHEMATICAL CONCEPTS:
     - Contour approximation: Reduces contour complexity for shape analysis
     - Pixel density analysis: Counts dark pixels within circle masks
     - Sorting algorithms: Organizes circles by position for row/column grouping
-    
+
     PARAMETER SELECTION DETAILS:
-    
+
     IMAGE PREPROCESSING PARAMETERS:
     - Resize to 700x700: Chosen because:
       * Provides consistent processing across different image sizes
@@ -429,13 +422,13 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
       * Small enough for fast processing
       * Maintains aspect ratio and circle proportions
       * Empirical testing showed optimal accuracy at this size
-    
+
     - Gaussian blur kernel (5,5) with sigma=1: Selected because:
       * Smaller than classification blur to preserve more detail for answer extraction
       * Sufficient to reduce noise without losing circle boundary information
       * Preserves the fine details needed for accurate pixel counting
       * Balances noise reduction with detail preservation
-    
+
     THRESHOLDING PARAMETERS:
     - Threshold value 170: Chosen because:
       * Multiple choice forms typically have light backgrounds (200-255)
@@ -443,61 +436,61 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
       * 170 provides clear separation between marked and unmarked circles
       * Empirical testing with various marking intensities confirmed this value
       * Works well with both pencil and pen markings
-    
+
     - THRESH_BINARY_INV: Inverts the result so marked circles become white (255)
       * Makes it easier to count marked pixels
       * Standard approach in OMR systems
-    
+
     CONTOUR DETECTION PARAMETERS:
     - RETR_EXTERNAL: Only external contours
       * Avoids detecting nested contours within circles
       * Focuses on circle boundaries, not internal details
       * Reduces processing complexity
-    
+
     - CHAIN_APPROX_NONE: Stores all contour points
       * Provides maximum accuracy for circle analysis
       * Important for precise circularity calculations
       * Necessary for accurate polygon approximation
-    
+
     CIRCLE FILTERING PARAMETERS:
     - Minimum area 50 pixels: Chosen because:
       * Filters out noise and very small artifacts
       * Rating circles are typically 100-400 pixels in area
       * Preserves all valid circles while eliminating noise
       * Based on analysis of multiple choice form circle sizes
-    
+
     - Polygon approximation epsilon (0.02): Selected because:
       * 2% accuracy provides good shape approximation
       * Circles need ≥6 points to maintain circular appearance
       * Text/rectangles need ≤6 points due to simpler shapes
       * This threshold effectively distinguishes circles from other shapes
-    
+
     PATTERN ORGANIZATION PARAMETERS:
     - Top-to-bottom sorting: Groups circles by rows
       * Multiple choice forms are typically arranged in rows
       * Each row represents one question/criterion
       * Natural reading order for form processing
-    
+
     - Left-to-right sorting within rows: Ensures consistent answer mapping
       * Rating scales are typically 1-5 from left to right
       * Provides predictable answer extraction matching human reading patterns
-    
+
     ANSWER EXTRACTION PARAMETERS:
     - Pixel counting within circle masks: Most reliable method because:
       * Directly measures the amount of marking in each circle
       * Works with any marking instrument (pencil, pen, marker)
       * Robust to slight variations in marking intensity
       * Standard approach in OMR systems
-    
+
     - Maximum pixel count selection: Finds the most marked circle
       * Assumes only one answer per question (standard multiple choice)
       * Handles cases where multiple circles might have some marking
       * Provides clear decision criteria
-    
+
     Args:
         image_path (str): Path to the image file
         save_visualizations (bool): Whether to save visualization images
-        
+
     Returns:
         list: List of ratings (1-5) for each row, or None if extraction fails
     """
@@ -508,7 +501,7 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
     if image is None:
         print(f"❌ Could not load image: {image_path}")
         return None
-    
+
     # IMAGE PREPROCESSING:
     # Resize to consistent dimensions for reliable processing
     image = cv2.resize(image, (700, 700))
@@ -534,9 +527,9 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
     if non_circle_count > 0:
         print("Header detected, cropping top 15%")
         cropped_image = image[crop_top:, :]
-        os.makedirs('visualization_output', exist_ok=True)
+        os.makedirs("visualization_output", exist_ok=True)
         base_filename = Path(image_path).stem
-        cropped_path = os.path.join('visualization_output', f'{base_filename}_cropped.jpg')
+        cropped_path = os.path.join("visualization_output", f"{base_filename}_cropped.jpg")
         cv2.imwrite(cropped_path, cropped_image)
         print(f"💾 Saved cropped image: {cropped_path}")
         image = cropped_image
@@ -547,19 +540,14 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
     imgGray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to enhance contrast
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     imgGray = clahe.apply(imgGray)
 
     # Apply Gaussian blur to reduce noise and smooth edges
     imgBlur = cv2.GaussianBlur(imgGray, (5, 5), 1)
 
     # Adaptive thresholding for robust binarization
-    imgThresh = cv2.adaptiveThreshold(
-        imgBlur, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        11, 2
-    )
+    imgThresh = cv2.adaptiveThreshold(imgBlur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
 
     # Morphological operations to clean up the thresholded image
     kernel = np.ones((3, 3), np.uint8)
@@ -596,7 +584,7 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
         imgGray = imgGray[y_min:y_max, x_min:x_max]
         imgBlur = imgBlur[y_min:y_max, x_min:x_max]
         imgThresh = imgThresh[y_min:y_max, x_min:x_max]
-    
+
     # CONTOUR DETECTION:
     # Finds all closed shapes in the thresholded image
     # RETR_EXTERNAL: Only external contours (not nested)
@@ -604,7 +592,7 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
     # REASONING: External contours focus on circle boundaries, not internal details
     # All contour points needed for accurate circularity and polygon analysis
     contours, hierarchy = cv2.findContours(imgThresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    
+
     # CIRCLE FILTERING ALGORITHM:
     # Filters contours to identify only circular shapes (rating circles)
     circleContours = []
@@ -622,20 +610,20 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
             # Look for circular shapes (more points = more circular)
             if len(approx) >= 6:  # Circles have more points than rectangles
                 circleContours.append(cnt)
-    
+
     if len(circleContours) == 0:
         print(f"⚠️  No circles found in {Path(image_path).name}")
         return None
-    
+
     print(f"🔍 Found {len(circleContours)} circles")
-    
+
     # PATTERN ORGANIZATION ALGORITHM:
     # Sorts circles by position to organize them into rows and columns
     # Top-to-bottom sorting groups circles by rows
     # REASONING: Multiple choice forms are typically arranged in rows
     # Each row represents one question/criterion with 5 rating options
     circleContours = imutils_contours.sort_contours(circleContours, method="top-to-bottom")[0]
-    
+
     # ROW GROUPING ALGORITHM:
     # Groups circles into rating rows (5 circles per row)
     # Each row represents one criterion with 5 rating options (1-5)
@@ -645,15 +633,15 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
             # Sort each row left-to-right for consistent answer mapping
             # REASONING: Rating scales are typically 1-5 from left to right
             # Provides predictable answer extraction matching human reading patterns
-            row = imutils_contours.sort_contours(circleContours[c:c + 5])[0]
+            row = imutils_contours.sort_contours(circleContours[c : c + 5])[0]
             ratingRows.append(row)
-    
+
     if len(ratingRows) == 0:
-        print(f"⚠️  No complete rows found (need 5 circles per row)")
+        print("⚠️  No complete rows found (need 5 circles per row)")
         return None
-    
+
     print(f"📊 Found {len(ratingRows)} rating rows")
-    
+
     # --- NEW LOGIC: Adaptive threshold and unique max detection ---
     all_pixel_values = []
     row_pixel_values = []
@@ -666,8 +654,7 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
             pixelValues.append(cv2.countNonZero(mask))
         row_pixel_values.append(pixelValues)
         all_pixel_values.extend(pixelValues)
-    
-    
+
     MEAN_PERCENT_THRESHOLD = 7.0  # percent
     ratings = []
     for i, pixelValues in enumerate(row_pixel_values):
@@ -688,11 +675,10 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
             ratings.append(max_indices[0] + 1)
         else:
             ratings.append(0)
-    
+
     # SAVE VISUALIZATIONS if requested
     if save_visualizations:
         visualize_threshold_and_detection(image_path, imgThresh, circleContours, ratingRows, ratings, cropped_image_path=cropped_path)
-        
 
     return ratings
 
@@ -700,28 +686,28 @@ def extract_rating_answers_from_cropped_image(image_path, save_visualizations=Fa
 def process_image_with_classification(image_path, save_visualizations=True):
     """
     Process a single image with classification first.
-    
+
     WORKFLOW:
     1. Classify image type using robust circle detection
     2. Process only multiple choice images
     3. Skip text/handwriting images to avoid false detections
     4. Extract and format rating answers
-    
+
     Args:
         image_path (str): Path to the image file
         save_visualizations (bool): Whether to save visualization images
-        
+
     Returns:
         bool: True if successfully processed, False if skipped or failed
     """
     print(f"\n🔍 Processing: {Path(image_path).name}")
-    
+
     # Step 1: Classify image type using advanced circle detection
     image_type = classify_image(image_path)
     print(f"📋 Classification: {image_type}")
-    
+
     # Step 2: Process based on classification
-    if image_type == 'multiple_choice':
+    if image_type == "multiple_choice":
         print("✅ Processing as multiple choice image...")
         ratings = extract_rating_answers_from_cropped_image(image_path, save_visualizations)
         if ratings:
@@ -744,7 +730,7 @@ def process_image_with_classification(image_path, save_visualizations=True):
         else:
             print("❌ No ratings extracted")
             return False
-    elif image_type == 'text_handwriting':
+    elif image_type == "text_handwriting":
         print("⏭️  Skipping text/handwriting image")
         return False
     else:
@@ -755,45 +741,45 @@ def process_image_with_classification(image_path, save_visualizations=True):
 def main():
     """
     Main function to process images or directories.
-    
+
     ALGORITHM:
     1. Parse command line arguments
     2. Handle single file or directory processing
     3. Apply classification and extraction pipeline
     4. Generate summary statistics
-    
+
     Usage:
         python omr_extract_answers_cropped.py /path/to/image_or_folder
     """
     if len(sys.argv) != 2:
         print("Usage: python omr_extract_answers_cropped.py /path/to/image_or_folder")
         sys.exit(1)
-    
+
     input_path = Path(sys.argv[1])
-    
+
     if input_path.is_dir():
         # DIRECTORY PROCESSING:
         # Find all image files in directory
         image_files = list(input_path.glob("*.jpg")) + list(input_path.glob("*.png"))
         print(f"📁 Found {len(image_files)} images in folder.")
-        
+
         # Process each image with classification
         processed_count = 0
         skipped_count = 0
-        
+
         for image_file in image_files:
             if process_image_with_classification(str(image_file), save_visualizations=True):
                 processed_count += 1
             else:
                 skipped_count += 1
-        
+
         # SUMMARY STATISTICS:
-        print(f"\n🎉 Processing complete.")
+        print("\n🎉 Processing complete.")
         print(f"✅ Processed: {processed_count} multiple choice images")
         print(f"⏭️  Skipped: {skipped_count} text/handwriting images")
         print(f"📊 Total: {len(image_files)} images")
-        print(f"💾 Visualization images saved in 'visualization_output' folder")
-                
+        print("💾 Visualization images saved in 'visualization_output' folder")
+
     elif input_path.is_file():
         # SINGLE FILE PROCESSING:
         process_image_with_classification(str(input_path), save_visualizations=True)

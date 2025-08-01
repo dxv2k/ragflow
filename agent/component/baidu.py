@@ -44,16 +44,14 @@ class Baidu(ComponentBase, ABC):
             return Baidu.be_output("")
 
         try:
-            url = 'http://www.baidu.com/s?wd=' + ans + '&rn=' + str(self._param.top_n)
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36'}
+            url = "http://www.baidu.com/s?wd=" + ans + "&rn=" + str(self._param.top_n)
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"}
             response = requests.get(url=url, headers=headers)
 
             url_res = re.findall(r"'url': \\\"(.*?)\\\"}", response.text)
             title_res = re.findall(r"'title': \\\"(.*?)\\\",\\n", response.text)
             body_res = re.findall(r"\"contentText\":\"(.*?)\"", response.text)
-            baidu_res = [{"content": re.sub('<em>|</em>', '', '<a href="' + url + '">' + title + '</a>    ' + body)} for
-                         url, title, body in zip(url_res, title_res, body_res)]
+            baidu_res = [{"content": re.sub("<em>|</em>", "", '<a href="' + url + '">' + title + "</a>    " + body)} for url, title, body in zip(url_res, title_res, body_res)]
             del body_res, url_res, title_res
         except Exception as e:
             return Baidu.be_output("**ERROR**: " + str(e))
@@ -64,4 +62,3 @@ class Baidu(ComponentBase, ABC):
         df = pd.DataFrame(baidu_res)
         logging.debug(f"df: {str(df)}")
         return df
-

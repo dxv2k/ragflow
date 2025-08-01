@@ -1,5 +1,4 @@
-from magic_pdf.data.data_reader_writer.multi_bucket_s3 import (
-    MultiBucketS3DataReader, MultiBucketS3DataWriter)
+from magic_pdf.data.data_reader_writer.multi_bucket_s3 import MultiBucketS3DataReader, MultiBucketS3DataWriter
 from magic_pdf.data.schemas import S3Config
 
 
@@ -11,7 +10,7 @@ class S3DataReader(MultiBucketS3DataReader):
         ak: str,
         sk: str,
         endpoint_url: str,
-        addressing_style: str = 'auto',
+        addressing_style: str = "auto",
     ):
         """s3 reader client.
 
@@ -25,7 +24,7 @@ class S3DataReader(MultiBucketS3DataReader):
             refer to https://boto3.amazonaws.com/v1/documentation/api/1.9.42/guide/s3.html
         """
         super().__init__(
-            f'{bucket}/{default_prefix_without_bucket}',
+            f"{bucket}/{default_prefix_without_bucket}",
             [
                 S3Config(
                     bucket_name=bucket,
@@ -46,7 +45,7 @@ class S3DataWriter(MultiBucketS3DataWriter):
         ak: str,
         sk: str,
         endpoint_url: str,
-        addressing_style: str = 'auto',
+        addressing_style: str = "auto",
     ):
         """s3 writer client.
 
@@ -60,7 +59,7 @@ class S3DataWriter(MultiBucketS3DataWriter):
             refer to https://boto3.amazonaws.com/v1/documentation/api/1.9.42/guide/s3.html
         """
         super().__init__(
-            f'{bucket}/{default_prefix_without_bucket}',
+            f"{bucket}/{default_prefix_without_bucket}",
             [
                 S3Config(
                     bucket_name=bucket,

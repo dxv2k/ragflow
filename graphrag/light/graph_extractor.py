@@ -4,6 +4,7 @@
 Reference:
  - [graphrag](https://github.com/microsoft/graphrag)
 """
+
 import re
 from typing import Any
 from dataclasses import dataclass
@@ -25,7 +26,6 @@ class GraphExtractionResult:
 
 
 class GraphExtractor(Extractor):
-
     _max_gleanings: int
 
     def __init__(
@@ -38,15 +38,9 @@ class GraphExtractor(Extractor):
     ):
         super().__init__(llm_invoker, language, entity_types)
         """Init method definition."""
-        self._max_gleanings = (
-            max_gleanings
-            if max_gleanings is not None
-            else ENTITY_EXTRACTION_MAX_GLEANINGS
-        )
+        self._max_gleanings = max_gleanings if max_gleanings is not None else ENTITY_EXTRACTION_MAX_GLEANINGS
         self._example_number = example_number
-        examples = "\n".join(
-                PROMPTS["entity_extraction_examples"][: int(self._example_number)]
-            )
+        examples = "\n".join(PROMPTS["entity_extraction_examples"][: int(self._example_number)])
 
         example_context_base = dict(
             tuple_delimiter=PROMPTS["DEFAULT_TUPLE_DELIMITER"],
@@ -72,9 +66,7 @@ class GraphExtractor(Extractor):
         self._if_loop_prompt = PROMPTS["entiti_if_loop_extraction"]
 
         self._left_token_count = llm_invoker.max_length - num_tokens_from_string(
-            self._entity_extract_prompt.format(
-                **self._context_base, input_text="{input_text}"
-            ).format(**self._context_base, input_text="")
+            self._entity_extract_prompt.format(**self._context_base, input_text="{input_text}").format(**self._context_base, input_text="")
         )
         self._left_token_count = max(llm_invoker.max_length * 0.6, self._left_token_count)
 
@@ -82,9 +74,7 @@ class GraphExtractor(Extractor):
         token_count = 0
         chunk_key = chunk_key_dp[0]
         content = chunk_key_dp[1]
-        hint_prompt = self._entity_extract_prompt.format(
-            **self._context_base, input_text="{input_text}"
-        ).format(**self._context_base, input_text=content)
+        hint_prompt = self._entity_extract_prompt.format(**self._context_base, input_text="{input_text}").format(**self._context_base, input_text=content)
 
         gen_conf = {"temperature": 0.8}
         async with chat_limiter:
@@ -121,4 +111,7 @@ class GraphExtractor(Extractor):
         maybe_nodes, maybe_edges = self._entities_and_relations(chunk_key, records, self._context_base["tuple_delimiter"])
         out_results.append((maybe_nodes, maybe_edges, token_count))
         if self.callback:
-            self.callback(0.5+0.1*len(out_results)/num_chunks, msg = f"Entities extraction of chunk {chunk_seq} {len(out_results)}/{num_chunks} done, {len(maybe_nodes)} nodes, {len(maybe_edges)} edges, {token_count} tokens.")
+            self.callback(
+                0.5 + 0.1 * len(out_results) / num_chunks,
+                msg=f"Entities extraction of chunk {chunk_seq} {len(out_results)}/{num_chunks} done, {len(maybe_nodes)} nodes, {len(maybe_edges)} edges, {token_count} tokens.",
+            )

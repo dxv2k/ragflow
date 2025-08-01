@@ -13,6 +13,7 @@ from magic_pdf.operators.pipes_llm import PipeResultLLM
 from magic_pdf.pdf_parse_union_core_v2_llm import pdf_parse_union
 from magic_pdf.operators import InferenceResultBase
 
+
 class InferenceResultLLM(InferenceResultBase):
     def __init__(self, inference_results: list, dataset: Dataset):
         """Initialized method.
@@ -34,9 +35,7 @@ class InferenceResultLLM(InferenceResultBase):
         base_name = os.path.basename(file_path)
         if not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
-        draw_model_bbox(
-            copy.deepcopy(self._infer_res), self._dataset, dir_name, base_name
-        )
+        draw_model_bbox(copy.deepcopy(self._infer_res), self._dataset, dir_name, base_name)
 
     def dump_model(self, writer: DataWriter, file_path: str):
         """Dump model inference result to file.
@@ -45,9 +44,7 @@ class InferenceResultLLM(InferenceResultBase):
             writer (DataWriter): writer handle
             file_path (str): the location of target file
         """
-        writer.write_string(
-            file_path, json.dumps(self._infer_res, ensure_ascii=False, indent=4)
-        )
+        writer.write_string(file_path, json.dumps(self._infer_res, ensure_ascii=False, indent=4))
 
     def get_infer_res(self):
         """Get the inference result.
@@ -94,21 +91,13 @@ class InferenceResultLLM(InferenceResultBase):
 
         def proc(*args, **kwargs) -> PipeResultLLM:
             res = pdf_parse_union(*args, **kwargs)
-            res['_parse_type'] = PARSE_TYPE_OCR
-            res['_version_name'] = __version__
-            if 'lang' in kwargs and kwargs['lang'] is not None:
-                res['lang'] = kwargs['lang']
+            res["_parse_type"] = PARSE_TYPE_OCR
+            res["_version_name"] = __version__
+            if "lang" in kwargs and kwargs["lang"] is not None:
+                res["lang"] = kwargs["lang"]
             return PipeResultLLM(res, self._dataset)
 
         res = self.apply(
-            proc,
-            self._dataset,
-            imageWriter,
-            SupportedPdfParseMethod.OCR,
-            start_page_id=start_page_id,
-            end_page_id=end_page_id,
-            debug_mode=debug_mode,
-            lang=lang,
-            MonkeyOCR_model=MonkeyOCR_model
+            proc, self._dataset, imageWriter, SupportedPdfParseMethod.OCR, start_page_id=start_page_id, end_page_id=end_page_id, debug_mode=debug_mode, lang=lang, MonkeyOCR_model=MonkeyOCR_model
         )
         return res

@@ -22,6 +22,7 @@ class IterationItemParam(ComponentParamBase):
     """
     Define the IterationItem component parameters.
     """
+
     def check(self):
         return True
 
@@ -50,4 +51,3 @@ class IterationItem(ComponentBase, ABC):
 
     def end(self):
         return self._idx == -1
-

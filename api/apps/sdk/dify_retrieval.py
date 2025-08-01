@@ -23,7 +23,7 @@ from api.utils.api_utils import validate_request, build_error_result, apikey_req
 from rag.app.tag import label_question
 
 
-@manager.route('/dify/retrieval', methods=['POST'])  # noqa: F821
+@manager.route("/dify/retrieval", methods=["POST"])  # noqa: F821
 @apikey_required
 @validate_request("knowledge_id", "query")
 def retrieval(tenant_id):
@@ -36,7 +36,6 @@ def retrieval(tenant_id):
     top = int(retrieval_setting.get("top_k", 1024))
 
     try:
-
         e, kb = KnowledgebaseService.get_by_id(kb_id)
         if not e:
             return build_error_result(message="Knowledgebase not found!", code=settings.RetCode.NOT_FOUND)
@@ -56,33 +55,21 @@ def retrieval(tenant_id):
             similarity_threshold=similarity_threshold,
             vector_similarity_weight=0.3,
             top=top,
-            rank_feature=label_question(question, [kb])
+            rank_feature=label_question(question, [kb]),
         )
 
         if use_kg:
-            ck = settings.kg_retrievaler.retrieval(question,
-                                                   [tenant_id],
-                                                   [kb_id],
-                                                   embd_mdl,
-                                                   LLMBundle(kb.tenant_id, LLMType.CHAT))
+            ck = settings.kg_retrievaler.retrieval(question, [tenant_id], [kb_id], embd_mdl, LLMBundle(kb.tenant_id, LLMType.CHAT))
             if ck["content_with_weight"]:
                 ranks["chunks"].insert(0, ck)
 
         records = []
         for c in ranks["chunks"]:
             c.pop("vector", None)
-            records.append({
-                "content": c["content_with_weight"],
-                "score": c["similarity"],
-                "title": c["docnm_kwd"],
-                "metadata": {}
-            })
+            records.append({"content": c["content_with_weight"], "score": c["similarity"], "title": c["docnm_kwd"], "metadata": {}})
 
         return jsonify({"records": records})
     except Exception as e:
         if str(e).find("not_found") > 0:
-            return build_error_result(
-                message='No chunk found! Check the chunk status please!',
-                code=settings.RetCode.NOT_FOUND
-            )
+            return build_error_result(message="No chunk found! Check the chunk status please!", code=settings.RetCode.NOT_FOUND)
         return build_error_result(message=str(e), code=settings.RetCode.SERVER_ERROR)

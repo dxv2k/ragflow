@@ -1,15 +1,10 @@
 from magic_pdf.config.ocr_content_type import BlockType
-from magic_pdf.libs.boxbase import (
-    calculate_iou,
-    calculate_overlap_area_in_bbox1_area_ratio,
-    calculate_vertical_projection_overlap_ratio,
-    get_minbox_if_overlap_by_ratio
-)
+from magic_pdf.libs.boxbase import calculate_iou, calculate_overlap_area_in_bbox1_area_ratio, calculate_vertical_projection_overlap_ratio, get_minbox_if_overlap_by_ratio
 
 
 def add_bboxes(blocks, block_type, bboxes):
     for block in blocks:
-        x0, y0, x1, y1 = block['bbox']
+        x0, y0, x1, y1 = block["bbox"]
         if block_type in [
             BlockType.ImageBody,
             BlockType.ImageCaption,
@@ -32,8 +27,8 @@ def add_bboxes(blocks, block_type, bboxes):
                     None,
                     None,
                     None,
-                    block['score'],
-                    block['group_id'],
+                    block["score"],
+                    block["group_id"],
                 ]
             )
         else:
@@ -51,7 +46,7 @@ def add_bboxes(blocks, block_type, bboxes):
                     None,
                     None,
                     None,
-                    block['score'],
+                    block["score"],
                 ]
             )
 
@@ -85,9 +80,7 @@ def ocr_prepare_bboxes_for_layout_split_v2(
     all_bboxes = fix_text_overlap_title_blocks(all_bboxes)
     all_bboxes = remove_need_drop_blocks(all_bboxes, discarded_blocks)
 
-
     all_bboxes = fix_interline_equation_overlap_text_blocks_with_hi_iou(all_bboxes)
-
 
     """discarded_blocks"""
     all_discarded_blocks = []
@@ -95,7 +88,7 @@ def ocr_prepare_bboxes_for_layout_split_v2(
 
     footnote_blocks = []
     for discarded in discarded_blocks:
-        x0, y0, x1, y1 = discarded['bbox']
+        x0, y0, x1, y1 = discarded["bbox"]
         if (x1 - x0) > (page_w / 3) and (y1 - y0) > 10 and y0 > (page_h / 2):
             footnote_blocks.append([x0, y0, x1, y1])
 
@@ -108,7 +101,7 @@ def ocr_prepare_bboxes_for_layout_split_v2(
     all_bboxes = remove_overlaps_min_blocks(all_bboxes)
     all_discarded_blocks = remove_overlaps_min_blocks(all_discarded_blocks)
     # all_bboxes, drop_reasons = remove_overlap_between_bbox_for_block(all_bboxes)
-    all_bboxes.sort(key=lambda x: x[0]+x[1])
+    all_bboxes.sort(key=lambda x: x[0] + x[1])
     return all_bboxes, all_discarded_blocks
 
 
@@ -119,13 +112,7 @@ def find_blocks_under_footnote(all_bboxes, footnote_blocks):
         for footnote_bbox in footnote_blocks:
             footnote_x0, footnote_y0, footnote_x1, footnote_y1 = footnote_bbox
 
-            if (
-                block_y0 >= footnote_y1
-                and calculate_vertical_projection_overlap_ratio(
-                    (block_x0, block_y0, block_x1, block_y1), footnote_bbox
-                )
-                >= 0.8
-            ):
+            if block_y0 >= footnote_y1 and calculate_vertical_projection_overlap_ratio((block_x0, block_y0, block_x1, block_y1), footnote_bbox) >= 0.8:
                 if block not in need_remove_blocks:
                     need_remove_blocks.append(block)
                     break
@@ -133,7 +120,6 @@ def find_blocks_under_footnote(all_bboxes, footnote_blocks):
 
 
 def fix_interline_equation_overlap_text_blocks_with_hi_iou(all_bboxes):
-
     text_blocks = []
     for block in all_bboxes:
         if block[7] == BlockType.Text:
@@ -161,7 +147,6 @@ def fix_interline_equation_overlap_text_blocks_with_hi_iou(all_bboxes):
 
 
 def fix_text_overlap_title_blocks(all_bboxes):
-
     text_blocks = []
     for block in all_bboxes:
         if block[7] == BlockType.Text:
@@ -193,12 +178,7 @@ def remove_need_drop_blocks(all_bboxes, discarded_blocks):
     for block in all_bboxes:
         for discarded_block in discarded_blocks:
             block_bbox = block[:4]
-            if (
-                calculate_overlap_area_in_bbox1_area_ratio(
-                    block_bbox, discarded_block['bbox']
-                )
-                > 0.6
-            ):
+            if calculate_overlap_area_in_bbox1_area_ratio(block_bbox, discarded_block["bbox"]) > 0.6:
                 if block not in need_remove:
                     need_remove.append(block)
                     break
@@ -210,26 +190,19 @@ def remove_need_drop_blocks(all_bboxes, discarded_blocks):
 
 
 def remove_overlaps_min_blocks(all_bboxes):
-
-
     need_remove = []
     for block1 in all_bboxes:
         for block2 in all_bboxes:
             if block1 != block2:
                 block1_bbox = block1[:4]
                 block2_bbox = block2[:4]
-                overlap_box = get_minbox_if_overlap_by_ratio(
-                    block1_bbox, block2_bbox, 0.8
-                )
+                overlap_box = get_minbox_if_overlap_by_ratio(block1_bbox, block2_bbox, 0.8)
                 if overlap_box is not None:
                     block_to_remove = next(
                         (block for block in all_bboxes if block[:4] == overlap_box),
                         None,
                     )
-                    if (
-                        block_to_remove is not None
-                        and block_to_remove not in need_remove
-                    ):
+                    if block_to_remove is not None and block_to_remove not in need_remove:
                         large_block = block1 if block1 != block_to_remove else block2
                         x1, y1, x2, y2 = large_block[:4]
                         sx1, sy1, sx2, sy2 = block_to_remove[:4]

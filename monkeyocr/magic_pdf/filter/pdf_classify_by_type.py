@@ -8,6 +8,7 @@ Definition criteria:
   1. ~~80% of pages have the same maximum image size and area exceeds 0.6 of page area~~
   2. Most pages have equal text length.
 """
+
 import json
 import sys
 from collections import Counter
@@ -22,6 +23,7 @@ from magic_pdf.filter.pdf_meta_scan import scan_max_page, junk_limit_min
 TEXT_LEN_THRESHOLD = 100
 AVG_TEXT_LEN_THRESHOLD = 100
 TEXT_LEN_SAMPLE_RATIO = 0.1  # Sample 0.1 of pages for text length statistics
+
 
 # A solution for merging images, combining certain special scanned version split images into one complete image
 def merge_images(image_list, page_width, page_height, max_offset=5, max_gap=2):
@@ -63,20 +65,17 @@ def merge_images(image_list, page_width, page_height, max_offset=5, max_gap=2):
             # If width meets standard, check if can stitch vertically
             if full_width:
                 # Vertical stitching needs two prerequisites: left and right boundaries can't offset more than max_offset, first image's bottom boundary and second image's top boundary can't offset more than max_gap
-                close1 = (last_x0 - max_offset) <= x0 <= (last_x0 + max_offset) and (last_x1 - max_offset) <= x1 <= (
-                            last_x1 + max_offset) and (last_y1 - max_gap) <= y0 <= (last_y1 + max_gap)
+                close1 = (last_x0 - max_offset) <= x0 <= (last_x0 + max_offset) and (last_x1 - max_offset) <= x1 <= (last_x1 + max_offset) and (last_y1 - max_gap) <= y0 <= (last_y1 + max_gap)
 
             # If height meets standard, check if can stitch horizontally
             if full_height:
                 # Horizontal stitching needs two prerequisites: top and bottom boundaries can't offset more than max_offset, first image's right boundary and second image's left boundary can't offset more than max_gap
-                close2 = (last_y0 - max_offset) <= y0 <= (last_y0 + max_offset) and (last_y1 - max_offset) <= y1 <= (
-                            last_y1 + max_offset) and (last_x1 - max_gap) <= x0 <= (last_x1 + max_gap)
+                close2 = (last_y0 - max_offset) <= y0 <= (last_y0 + max_offset) and (last_y1 - max_offset) <= y1 <= (last_y1 + max_offset) and (last_x1 - max_gap) <= x0 <= (last_x1 + max_gap)
 
             # Check if the image can be merged with the last image
             if (full_width and close1) or (full_height and close2):
                 # Merge the image with the last image
-                merged[-1] = [min(x0, last_x0), min(y0, last_y0),
-                              max(x1, last_x1), max(y1, last_y1), imgid]
+                merged[-1] = [min(x0, last_x0), min(y0, last_y0), max(x1, last_x1), max(y1, last_y1), imgid]
             else:
                 # Add the image as a new image
                 merged.append(img)
@@ -122,15 +121,13 @@ def classify_by_area(total_page: int, page_width, page_height, img_sz_list, text
     # if len(fake_image_ids) > 0 and any([l > TEXT_LEN_THRESHOLD for l in text_len_at_bad_image_page_idx]):  # These transparent images' pages have text greater than threshold
     #     return True
 
-    img_sz_list = [[img_sz for img_sz in page_img_sz if img_sz[-1] not in bad_image_objid] for page_img_sz in
-                   img_sz_list]  # Filter out repeatedly appearing images
+    img_sz_list = [[img_sz for img_sz in page_img_sz if img_sz[-1] not in bad_image_objid] for page_img_sz in img_sz_list]  # Filter out repeatedly appearing images
 
     # Some scanned versions split one page image into many, need to stitch images first then calculate
     img_sz_list = merge_images(img_sz_list, page_width, page_height)
 
     # Calculate maximum image area per page, then calculate ratio of this area to page area
-    max_image_area_per_page = [mymax([(x1 - x0) * (y1 - y0) for x0, y0, x1, y1, _ in page_img_sz]) for page_img_sz in
-                               img_sz_list]
+    max_image_area_per_page = [mymax([(x1 - x0) * (y1 - y0) for x0, y0, x1, y1, _ in page_img_sz]) for page_img_sz in img_sz_list]
     page_area = page_width * page_height
     max_image_area_per_page = [area / page_area for area in max_image_area_per_page]
     max_image_area_per_page = [area for area in max_image_area_per_page if area > 0.5]
@@ -211,9 +208,9 @@ def classify_by_text_layout(text_layout_per_page: list):
         bool: If text layout is mainly vertical, return False; otherwise return True.
     """
     # Count vertical layouts in text_layout_per_page
-    count_vertical = sum(1 for item in text_layout_per_page if item == 'vertical')
+    count_vertical = sum(1 for item in text_layout_per_page if item == "vertical")
     # Count horizontal layouts in text_layout_per_page
-    count_horizontal = sum(1 for item in text_layout_per_page if item == 'horizontal')
+    count_horizontal = sum(1 for item in text_layout_per_page if item == "horizontal")
     # Calculate ratio of vertical layouts in text_layout_per_page
     known_layout_cnt = count_vertical + count_horizontal
     if known_layout_cnt != 0:
@@ -244,12 +241,14 @@ def classify_by_img_narrow_strips(page_width, page_height, img_sz_list):
     def is_narrow_strip(img):
         x0, y0, x1, y1, _ = img
         width, height = x1 - x0, y1 - y0
-        return any([
-            # Image width >= 90% of page width, and width >= 4 times height
-            width >= page_width * 0.9 and width >= height * 4,
-            # Image height >= 90% of page height, and height >= 4 times width
-            height >= page_height * 0.9 and height >= width * 4,
-        ])
+        return any(
+            [
+                # Image width >= 90% of page width, and width >= 4 times height
+                width >= page_width * 0.9 and width >= height * 4,
+                # Image height >= 90% of page height, and height >= 4 times width
+                height >= page_height * 0.9 and height >= width * 4,
+            ]
+        )
 
     # Initialize count of pages meeting conditions
     narrow_strip_pages_count = 0
@@ -282,19 +281,18 @@ def classify_by_img_narrow_strips(page_width, page_height, img_sz_list):
     return narrow_strip_pages_ratio < 0.5
 
 
-def classify(total_page: int, page_width, page_height, img_sz_list: list, text_len_list: list, img_num_list: list,
-             text_layout_list: list, invalid_chars: bool):
+def classify(total_page: int, page_width, page_height, img_sz_list: list, text_len_list: list, img_num_list: list, text_layout_list: list, invalid_chars: bool):
     """
     Image and page length units here are pts
     """
     results = {
-        'by_image_area': classify_by_area(total_page, page_width, page_height, img_sz_list, text_len_list),
-        'by_text_len': classify_by_text_len(text_len_list, total_page),
-        'by_avg_words': classify_by_avg_words(text_len_list),
-        'by_img_num': classify_by_img_num(img_sz_list, img_num_list),
-        'by_text_layout': classify_by_text_layout(text_layout_list),
-        'by_img_narrow_strips': classify_by_img_narrow_strips(page_width, page_height, img_sz_list),
-        'by_invalid_chars': invalid_chars,
+        "by_image_area": classify_by_area(total_page, page_width, page_height, img_sz_list, text_len_list),
+        "by_text_len": classify_by_text_len(text_len_list, total_page),
+        "by_avg_words": classify_by_avg_words(text_len_list),
+        "by_img_num": classify_by_img_num(img_sz_list, img_num_list),
+        "by_text_layout": classify_by_text_layout(text_layout_list),
+        "by_img_narrow_strips": classify_by_img_narrow_strips(page_width, page_height, img_sz_list),
+        "by_invalid_chars": invalid_chars,
     }
 
     if all(results.values()):
@@ -307,7 +305,8 @@ def classify(total_page: int, page_width, page_height, img_sz_list: list, text_l
             f" by_text: {results['by_text_len']}, by_avg_words: {results['by_avg_words']}, by_img_num: {results['by_img_num']},"
             f" by_text_layout: {results['by_text_layout']}, by_img_narrow_strips: {results['by_img_narrow_strips']},"
             f" by_invalid_chars: {results['by_invalid_chars']}",
-            file=sys.stderr)  # Use this situation to quickly find which PDFs are special, and fix classification algorithm accordingly
+            file=sys.stderr,
+        )  # Use this situation to quickly find which PDFs are special, and fix classification algorithm accordingly
         return False, results
 
 
@@ -327,15 +326,15 @@ def main(json_file):
                 page_width = o["page_width_pts"]
                 page_height = o["page_height_pts"]
                 img_sz_list = o["image_info_per_page"]
-                text_len_list = o['text_len_per_page']
-                text_layout_list = o['text_layout_per_page']
-                pdf_path = o['pdf_path']
-                is_encrypted = o['is_encrypted']
-                is_needs_password = o['is_needs_password']
+                text_len_list = o["text_len_per_page"]
+                text_layout_list = o["text_layout_per_page"]
+                pdf_path = o["pdf_path"]
+                is_encrypted = o["is_encrypted"]
+                is_needs_password = o["is_needs_password"]
                 if is_encrypted or total_page == 0 or is_needs_password:  # Encrypted, password-required, no pages - don't process
                     continue
                 tag = classify(total_page, page_width, page_height, img_sz_list, text_len_list, text_layout_list)
-                o['is_text_pdf'] = tag
+                o["is_text_pdf"] = tag
                 print(json.dumps(o, ensure_ascii=False))
     except Exception as e:
         print("ERROR: ", e, file=sys.stderr)

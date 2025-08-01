@@ -22,10 +22,10 @@ from rag.utils import num_tokens_from_string, encoder
 
 
 class RelevantParam(GenerateParam):
-
     """
     Define the Relevant component parameters.
     """
+
     def __init__(self):
         super().__init__()
         self.prompt = ""
@@ -39,9 +39,9 @@ class RelevantParam(GenerateParam):
 
     def get_prompt(self):
         self.prompt = """
-        You are a grader assessing relevance of a retrieved document to a user question. 
+        You are a grader assessing relevance of a retrieved document to a user question.
         It does not need to be a stringent test. The goal is to filter out erroneous retrievals.
-        If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. 
+        If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant.
         Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.
         No other words needed except 'yes' or 'no'.
         """
@@ -66,10 +66,9 @@ class Relevant(Generate, ABC):
         chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
 
         if num_tokens_from_string(ans) >= chat_mdl.max_length - 4:
-            ans = encoder.decode(encoder.encode(ans)[:chat_mdl.max_length - 4])
+            ans = encoder.decode(encoder.encode(ans)[: chat_mdl.max_length - 4])
 
-        ans = chat_mdl.chat(self._param.get_prompt(), [{"role": "user", "content": ans}],
-                            self._param.gen_conf())
+        ans = chat_mdl.chat(self._param.get_prompt(), [{"role": "user", "content": ans}], self._param.gen_conf())
 
         logging.debug(ans)
         if ans.lower().find("yes") >= 0:
@@ -80,4 +79,3 @@ class Relevant(Generate, ABC):
 
     def debug(self, **kwargs):
         return self._run([], **kwargs)
-

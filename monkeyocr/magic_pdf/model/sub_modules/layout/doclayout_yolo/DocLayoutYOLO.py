@@ -1,5 +1,5 @@
 from doclayout_yolo import YOLOv10
-import torch
+
 
 class DocLayoutYOLOModel(object):
     def __init__(self, weight, device):
@@ -8,13 +8,7 @@ class DocLayoutYOLOModel(object):
 
     def predict(self, image):
         layout_res = []
-        doclayout_yolo_res = self.model.predict(
-            image,
-            imgsz=1280,
-            conf=0.10,
-            iou=0.45,
-            verbose=False, device=self.device
-        )[0]
+        doclayout_yolo_res = self.model.predict(image, imgsz=1280, conf=0.10, iou=0.45, verbose=False, device=self.device)[0]
         for xyxy, conf, cla in zip(
             doclayout_yolo_res.boxes.xyxy.cpu(),
             doclayout_yolo_res.boxes.conf.cpu(),

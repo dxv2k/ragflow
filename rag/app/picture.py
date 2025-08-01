@@ -32,13 +32,8 @@ ocr = OCR()
 
 
 def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
-    img = Image.open(io.BytesIO(binary)).convert('RGB')
-    doc = {
-        "docnm_kwd": filename,
-        "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)),
-        "image": img,
-        "doc_type_kwd": "image"
-    }
+    img = Image.open(io.BytesIO(binary)).convert("RGB")
+    doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), "image": img, "doc_type_kwd": "image"}
     bxs = ocr(np.array(img))
     txt = "\n".join([t[0] for _, t in bxs if t[0]])
     eng = lang.lower() == "english"
@@ -52,7 +47,7 @@ def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
         callback(0.4, "Use CV LLM to describe the picture.")
         cv_mdl = LLMBundle(tenant_id, LLMType.IMAGE2TEXT, lang=lang)
         img_binary = io.BytesIO()
-        img.save(img_binary, format='JPEG')
+        img.save(img_binary, format="JPEG")
         img_binary.seek(0)
         ans = cv_mdl.describe(img_binary.read())
         callback(0.8, "CV LLM respond: %s ..." % ans[:32])
@@ -79,7 +74,7 @@ def vision_llm_chunk(binary, vision_model, prompt=None, callback=None):
 
     try:
         img_binary = io.BytesIO()
-        img.save(img_binary, format='JPEG')
+        img.save(img_binary, format="JPEG")
         img_binary.seek(0)
 
         ans = clean_markdown_block(vision_model.describe_with_prompt(img_binary.read(), prompt))

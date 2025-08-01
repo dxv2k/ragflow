@@ -26,18 +26,12 @@ from deepdoc.parser import PdfParser, ExcelParser, PlainParser, HtmlParser
 
 
 class Pdf(PdfParser):
-    def __call__(self, filename, binary=None, from_page=0,
-                 to_page=100000, zoomin=3, callback=None):
+    def __call__(self, filename, binary=None, from_page=0, to_page=100000, zoomin=3, callback=None):
         from timeit import default_timer as timer
+
         start = timer()
         callback(msg="OCR started")
-        self.__images__(
-            filename if not binary else binary,
-            zoomin,
-            from_page,
-            to_page,
-            callback
-        )
+        self.__images__(filename if not binary else binary, zoomin, from_page, to_page, callback)
         callback(msg="OCR finished ({:.2f}s)".format(timer() - start))
 
         start = timer()
@@ -55,22 +49,18 @@ class Pdf(PdfParser):
         tbls = self._extract_table_figure(True, zoomin, True, True)
         self._concat_downward()
 
-        sections = [(b["text"], self.get_position(b, zoomin))
-                    for i, b in enumerate(self.boxes)]
+        sections = [(b["text"], self.get_position(b, zoomin)) for i, b in enumerate(self.boxes)]
         for (img, rows), poss in tbls:
             if not rows:
                 continue
-            sections.append((rows if isinstance(rows, str) else rows[0],
-                             [(p[0] + 1 - from_page, p[1], p[2], p[3], p[4]) for p in poss]))
-        return [(txt, "") for txt, _ in sorted(sections, key=lambda x: (
-            x[-1][0][0], x[-1][0][3], x[-1][0][1]))], None
+            sections.append((rows if isinstance(rows, str) else rows[0], [(p[0] + 1 - from_page, p[1], p[2], p[3], p[4]) for p in poss]))
+        return [(txt, "") for txt, _ in sorted(sections, key=lambda x: (x[-1][0][0], x[-1][0][3], x[-1][0][1]))], None
 
 
-def chunk(filename, binary=None, from_page=0, to_page=100000,
-          lang="Chinese", callback=None, **kwargs):
+def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", callback=None, **kwargs):
     """
-        Supported file formats are docx, pdf, excel, txt.
-        One file forms a chunk which maintains original text order.
+    Supported file formats are docx, pdf, excel, txt.
+    One file forms a chunk which maintains original text order.
     """
 
     eng = lang.lower() == "english"  # is_english(cks)
@@ -87,8 +77,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
         pdf_parser = Pdf()
         if kwargs.get("layout_recognize", "DeepDOC") == "Plain Text":
             pdf_parser = PlainParser()
-        sections, _ = pdf_parser(
-            filename if not binary else binary, to_page=to_page, callback=callback)
+        sections, _ = pdf_parser(filename if not binary else binary, to_page=to_page, callback=callback)
         sections = [s for s, _ in sections if s]
 
     elif re.search(r"\.xlsx?$", filename, re.IGNORECASE):
@@ -113,18 +102,14 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
         callback(0.1, "Start to parse.")
         binary = BytesIO(binary)
         doc_parsed = parser.from_buffer(binary)
-        sections = doc_parsed['content'].split('\n')
+        sections = doc_parsed["content"].split("\n")
         sections = [s for s in sections if s]
         callback(0.8, "Finish parsing.")
 
     else:
-        raise NotImplementedError(
-            "file type not supported yet(doc, docx, pdf, txt supported)")
+        raise NotImplementedError("file type not supported yet(doc, docx, pdf, txt supported)")
 
-    doc = {
-        "docnm_kwd": filename,
-        "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))
-    }
+    doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))}
     doc["title_sm_tks"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
     tokenize(doc, "\n".join(sections), eng)
     return [doc]

@@ -5,7 +5,7 @@ slug: /categorize_component
 
 # Categorize component
 
-A component that classifies user inputs and applies strategies accordingly. 
+A component that classifies user inputs and applies strategies accordingly.
 
 ---
 
@@ -22,7 +22,7 @@ A **Categorize** component is essential when you need the LLM to help you identi
 The **Categorize** component relies on input variables to specify its data inputs (queries). Click **+ Add variable** in the **Input** section to add the desired input variables. There are two types of input variables: **Reference** and **Text**.
 
 - **Reference**: Uses a component's output or a user input as the data source. You are required to select from the dropdown menu:
-  - A component ID under **Component Output**, or 
+  - A component ID under **Component Output**, or
   - A global variable under **Begin input**, which is defined in the **Begin** component.
 - **Text**: Uses fixed text as the query. You are required to enter static text.
 
@@ -30,26 +30,26 @@ The **Categorize** component relies on input variables to specify its data input
 
 Click the dropdown menu of **Model** to show the model configuration window.
 
-- **Model**: The chat model to use.  
+- **Model**: The chat model to use.
   - Ensure you set the chat model correctly on the **Model providers** page.
   - You can use different models for different components to increase flexibility or improve overall performance.
-- **Freedom**: A shortcut to **Temperature**, **Top P**, **Presence penalty**, and **Frequency penalty** settings, indicating the freedom level of the model. From **Improvise**, **Precise**, to **Balance**, each preset configuration corresponds to a unique combination of **Temperature**, **Top P**, **Presence penalty**, and **Frequency penalty**.  
-  This parameter has three options:  
+- **Freedom**: A shortcut to **Temperature**, **Top P**, **Presence penalty**, and **Frequency penalty** settings, indicating the freedom level of the model. From **Improvise**, **Precise**, to **Balance**, each preset configuration corresponds to a unique combination of **Temperature**, **Top P**, **Presence penalty**, and **Frequency penalty**.
+  This parameter has three options:
   - **Improvise**: Produces more creative responses.
   - **Precise**: (Default) Produces more conservative responses.
   - **Balance**: A middle ground between **Improvise** and **Precise**.
-- **Temperature**: The randomness level of the model's output.  
-  Defaults to 0.1.  
+- **Temperature**: The randomness level of the model's output.
+  Defaults to 0.1.
   - Lower values lead to more deterministic and predictable outputs.
   - Higher values lead to more creative and varied outputs.
   - A temperature of zero results in the same output for the same prompt.
-- **Top P**: Nucleus sampling.  
+- **Top P**: Nucleus sampling.
   - Reduces the likelihood of generating repetitive or unnatural text by setting a threshold *P* and restricting the sampling to tokens with a cumulative probability exceeding *P*.
   - Defaults to 0.3.
-- **Presence penalty**: Encourages the model to include a more diverse range of tokens in the response.  
+- **Presence penalty**: Encourages the model to include a more diverse range of tokens in the response.
   - A higher **presence penalty** value results in the model being more likely to generate tokens not yet been included in the generated text.
   - Defaults to 0.4.
-- **Frequency penalty**: Discourages the model from repeating the same words or phrases too frequently in the generated text.  
+- **Frequency penalty**: Discourages the model from repeating the same words or phrases too frequently in the generated text.
   - A higher **frequency penalty** value results in the model being more conservative in its use of repeated tokens.
   - Defaults to 0.7.
 
@@ -70,7 +70,7 @@ This feature is used for multi-turn dialogue *only*. If your **Categorize** comp
 
 ### Category name
 
-A **Categorize** component must have at least two categories. This field sets the name of the category. Click **+ Add Item** to include the intended categories. 
+A **Categorize** component must have at least two categories. This field sets the name of the category. Click **+ Add Item** to include the intended categories.
 
 :::tip NOTE
 You will notice that the category name is auto-populated. No worries. Each category is assigned a random name upon creation. Feel free to change it to a name that is understandable to the LLM.
@@ -78,7 +78,7 @@ You will notice that the category name is auto-populated. No worries. Each categ
 
 #### Description
 
-Description of this category.  
+Description of this category.
 
 You can input criteria, situation, or information that may help the LLM determine which inputs belong in this category.
 
@@ -105,4 +105,3 @@ You can explore our customer service agent template, where a **Categorize** comp
 2. Click **+ Create agent** on the top right of the page to open the **agent template** page.
 3. On the **agent template** page, hover over the **Interpreter** card and click **Use this template**.
 4. Name your new agent and click **OK** to enter the workflow editor.
-

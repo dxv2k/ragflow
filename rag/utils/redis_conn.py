@@ -24,6 +24,7 @@ from rag.utils import singleton
 from valkey.lock import Lock
 import trio
 
+
 class RedisMsg:
     def __init__(self, consumer, queue_name, group_name, msg_id, message):
         self.__consumer = consumer
@@ -153,9 +154,7 @@ class RedisDB:
             res = self.REDIS.smembers(key)
             return res
         except Exception as e:
-            logging.warning(
-                "RedisDB.smembers " + str(key) + " got exception: " + str(e)
-            )
+            logging.warning("RedisDB.smembers " + str(key) + " got exception: " + str(e))
             self.__open__()
         return None
 
@@ -191,9 +190,7 @@ class RedisDB:
             res = self.REDIS.zrangebyscore(key, min, max)
             return res
         except Exception as e:
-            logging.warning(
-                "RedisDB.zrangebyscore " + str(key) + " got exception: " + str(e)
-            )
+            logging.warning("RedisDB.zrangebyscore " + str(key) + " got exception: " + str(e))
             self.__open__()
         return None
 
@@ -204,9 +201,7 @@ class RedisDB:
             pipeline.execute()
             return True
         except Exception as e:
-            logging.warning(
-                "RedisDB.transaction " + str(key) + " got exception: " + str(e)
-            )
+            logging.warning("RedisDB.transaction " + str(key) + " got exception: " + str(e))
             self.__open__()
         return False
 
@@ -217,9 +212,7 @@ class RedisDB:
                 self.REDIS.xadd(queue, payload)
                 return True
             except Exception as e:
-                logging.exception(
-                    "RedisDB.queue_product " + str(queue) + " got exception: " + str(e)
-                )
+                logging.exception("RedisDB.queue_product " + str(queue) + " got exception: " + str(e))
         return False
 
     def queue_consumer(self, queue_name, group_name, consumer_name, msg_id=b">") -> RedisMsg:
@@ -245,15 +238,10 @@ class RedisDB:
             res = RedisMsg(self.REDIS, queue_name, group_name, msg_id, payload)
             return res
         except Exception as e:
-            if str(e) == 'no such key':
+            if str(e) == "no such key":
                 pass
             else:
-                logging.exception(
-                    "RedisDB.queue_consumer "
-                    + str(queue_name)
-                    + " got exception: "
-                    + str(e)
-                )
+                logging.exception("RedisDB.queue_consumer " + str(queue_name) + " got exception: " + str(e))
         return None
 
     def get_unacked_iterator(self, queue_names: list[str], group_name, consumer_name):
@@ -262,7 +250,7 @@ class RedisDB:
                 try:
                     group_info = self.REDIS.xinfo_groups(queue_name)
                 except Exception as e:
-                    if str(e) == 'no such key':
+                    if str(e) == "no such key":
                         logging.warning(f"RedisDB.get_unacked_iterator queue {queue_name} doesn't exist")
                         continue
                 if not any(gi["name"] == group_name for gi in group_info):
@@ -277,20 +265,16 @@ class RedisDB:
                     logging.info(f"RedisDB.get_unacked_iterator {queue_name} {consumer_name} {current_min}")
                     yield payload
         except Exception:
-            logging.exception(
-                "RedisDB.get_unacked_iterator got exception: "
-            )
+            logging.exception("RedisDB.get_unacked_iterator got exception: ")
             self.__open__()
 
     def get_pending_msg(self, queue, group_name):
         try:
-            messages = self.REDIS.xpending_range(queue, group_name, '-', '+', 10)
+            messages = self.REDIS.xpending_range(queue, group_name, "-", "+", 10)
             return messages
         except Exception as e:
-            if 'No such key' not in (str(e) or ''):
-                logging.warning(
-                    "RedisDB.get_pending_msg " + str(queue) + " got exception: " + str(e)
-                )
+            if "No such key" not in (str(e) or ""):
+                logging.warning("RedisDB.get_pending_msg " + str(queue) + " got exception: " + str(e))
         return []
 
     def requeue_msg(self, queue: str, group_name: str, msg_id: str):
@@ -300,9 +284,7 @@ class RedisDB:
                 self.REDIS.xadd(queue, messages[0][1])
                 self.REDIS.xack(queue, group_name, msg_id)
         except Exception as e:
-            logging.warning(
-                "RedisDB.get_pending_msg " + str(queue) + " got exception: " + str(e)
-            )
+            logging.warning("RedisDB.get_pending_msg " + str(queue) + " got exception: " + str(e))
 
     def queue_info(self, queue, group_name) -> dict | None:
         try:
@@ -311,9 +293,7 @@ class RedisDB:
                 if group["name"] == group_name:
                     return group
         except Exception as e:
-            logging.warning(
-                "RedisDB.queue_info " + str(queue) + " got exception: " + str(e)
-            )
+            logging.warning("RedisDB.queue_info " + str(queue) + " got exception: " + str(e))
         return None
 
     def delete_if_equal(self, key: str, expected_value: str) -> bool:
@@ -331,8 +311,8 @@ class RedisDB:
             logging.warning("RedisDB.delete " + str(key) + " got exception: " + str(e))
             self.__open__()
         return False
-    
-    
+
+
 REDIS_CONN = RedisDB()
 
 

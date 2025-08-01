@@ -39,10 +39,10 @@ const EmailForm = ({ onValuesChange, form, node }: IOperatorForm) => {
         <div>{t('jsonFormatTip')}</div>
         <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
           {`{
-  "to_email": "recipient@example.com",  
+  "to_email": "recipient@example.com",
   "cc_email": "cc@example.com",
-  "subject": "Email Subject",           
-  "content": "Email Content"            
+  "subject": "Email Subject",
+  "content": "Email Content"
 }`}
         </pre>
       </div>

@@ -43,8 +43,7 @@ class DataSet(Base):
         super().__init__(rag, res_dict)
 
     def update(self, update_message: dict):
-        res = self.put(f'/datasets/{self.id}',
-                       update_message)
+        res = self.put(f"/datasets/{self.id}", update_message)
         res = res.json()
         if res.get("code") != 0:
             raise Exception(res["message"])
@@ -62,11 +61,8 @@ class DataSet(Base):
             return doc_list
         raise Exception(res.get("message"))
 
-    def list_documents(self, id: str | None = None, keywords: str | None = None, page: int = 1, page_size: int = 30,
-                       orderby: str = "create_time", desc: bool = True):
-        res = self.get(f"/datasets/{self.id}/documents",
-                       params={"id": id, "keywords": keywords, "page": page, "page_size": page_size, "orderby": orderby,
-                               "desc": desc})
+    def list_documents(self, id: str | None = None, keywords: str | None = None, page: int = 1, page_size: int = 30, orderby: str = "create_time", desc: bool = True):
+        res = self.get(f"/datasets/{self.id}/documents", params={"id": id, "keywords": keywords, "page": page, "page_size": page_size, "orderby": orderby, "desc": desc})
         res = res.json()
         documents = []
         if res.get("code") == 0:

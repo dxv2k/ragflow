@@ -47,28 +47,28 @@ class PaddleXLayoutModelWrapper:
 
     def _process_paddlex_result(self, paddlex_result_obj: dict) -> List[dict]:
         layout_res = []
-        for det in paddlex_result_obj.get('boxes', []):
-            label_name = det.get('label')
+        for det in paddlex_result_obj.get("boxes", []):
+            label_name = det.get("label")
             category_id = self.category_mapping.get(label_name, -1)
-            
+
             # Skip unknown or incomplete detections
-            if category_id == -1 or not det.get('coordinate') or not det.get('score'):
+            if category_id == -1 or not det.get("coordinate") or not det.get("score"):
                 continue
-            
-            xmin, ymin, xmax, ymax = [int(p) for p in det['coordinate']]
+
+            xmin, ymin, xmax, ymax = [int(p) for p in det["coordinate"]]
             new_item = {
                 "category_id": category_id,
                 "original_label": label_name,
                 "poly": [xmin, ymin, xmax, ymin, xmax, ymax, xmin, ymax],
-                "score": round(float(det['score']), 3),
+                "score": round(float(det["score"]), 3),
             }
             layout_res.append(new_item)
         return layout_res
 
     def _prepare_image(self, image: Union[np.ndarray, Image.Image]) -> np.ndarray:
         if isinstance(image, Image.Image):
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            if image.mode != "RGB":
+                image = image.convert("RGB")
             return np.array(image)
         elif isinstance(image, np.ndarray):
             if image.ndim == 2:
@@ -88,7 +88,7 @@ class PaddleXLayoutModelWrapper:
 
     def batch_predict(self, images: List[Union[np.ndarray, Image.Image]], batch_size: int) -> List[List[dict]]:
         prepared_images = [self._prepare_image(img) for img in images]
-        
+
         # The model.predict itself handles batching, but we call it once.
         paddlex_outputs = list(self.model.predict(prepared_images, batch_size=batch_size, layout_nms=True))
         return [self._process_paddlex_result(res) for res in paddlex_outputs]

@@ -13,10 +13,7 @@ junk_limit_min = 10
 
 
 def calculate_max_image_area_per_page(result: list, page_width_pts, page_height_pts):
-    max_image_area_per_page = [
-        mymax([(x1 - x0) * (y1 - y0) for x0, y0, x1, y1, _ in page_img_sz])
-        for page_img_sz in result
-    ]
+    max_image_area_per_page = [mymax([(x1 - x0) * (y1 - y0) for x0, y0, x1, y1, _ in page_img_sz]) for page_img_sz in result]
     page_area = int(page_width_pts) * int(page_height_pts)
     max_image_area_per_page = [area / page_area for area in max_image_area_per_page]
     max_image_area_per_page = [area for area in max_image_area_per_page if area > 0.6]
@@ -28,10 +25,7 @@ def process_image(page, junk_img_bojids=[]):
     items = page.get_images()
     dedup = set()
     for img in items:
-
-        img_bojid = img[
-            0
-        ]
+        img_bojid = img[0]
         if img_bojid in junk_img_bojids:
             continue
         recs = page.get_image_rects(img, transform=True)
@@ -48,9 +42,7 @@ def process_image(page, junk_img_bojids=[]):
                 img_bojid,
             ) in dedup:
                 continue
-            if not all(
-                [width, height]
-            ):
+            if not all([width, height]):
                 continue
             dedup.add((x0, y0, x1, y1, img_bojid))
             page_result.append([x0, y0, x1, y1, img_bojid])
@@ -58,27 +50,15 @@ def process_image(page, junk_img_bojids=[]):
 
 
 def get_image_info(doc: fitz.Document, page_width_pts, page_height_pts) -> list:
-
     img_bojid_counter = Counter(img[0] for page in doc for img in page.get_images())
-
 
     junk_limit = max(len(doc) * 0.5, junk_limit_min)
 
-    junk_img_bojids = [
-        img_bojid
-        for img_bojid, count in img_bojid_counter.items()
-        if count >= junk_limit
-    ]
-
-
-
-
-
+    junk_img_bojids = [img_bojid for img_bojid, count in img_bojid_counter.items() if count >= junk_limit]
 
     imgs_len_list = [len(page.get_images()) for page in doc]
 
     special_limit_pages = 10
-
 
     result = []
     break_loop = False
@@ -87,44 +67,29 @@ def get_image_info(doc: fitz.Document, page_width_pts, page_height_pts) -> list:
             break
         if i >= special_limit_pages:
             break
-        page_result = process_image(
-            page
-        )
+        page_result = process_image(page)
         result.append(page_result)
         for item in result:
-            if not any(
-                item
-            ):
-                if (
-                    max(imgs_len_list) == min(imgs_len_list)
-                    and max(imgs_len_list) >= junk_limit_min
-                ):
+            if not any(item):
+                if max(imgs_len_list) == min(imgs_len_list) and max(imgs_len_list) >= junk_limit_min:
                     junk_img_bojids = []
                 else:
                     pass
                 break_loop = True
                 break
     if not break_loop:
-
         top_eighty_percent = get_top_percent_list(imgs_len_list, 0.8)
 
         if len(set(top_eighty_percent)) == 1 and max(imgs_len_list) >= junk_limit_min:
-
             # if max(imgs_len_list) == min(imgs_len_list) and max(imgs_len_list) >= junk_limit_min:
 
-
-            max_image_area_per_page = calculate_max_image_area_per_page(
-                result, page_width_pts, page_height_pts
-            )
-            if (
-                len(max_image_area_per_page) < 0.8 * special_limit_pages
-            ):
+            max_image_area_per_page = calculate_max_image_area_per_page(result, page_width_pts, page_height_pts)
+            if len(max_image_area_per_page) < 0.8 * special_limit_pages:
                 junk_img_bojids = []
             else:
                 pass
         else:
             junk_img_bojids = []
-
 
     result = []
     for i, page in enumerate(doc):
@@ -161,13 +126,12 @@ def get_pdf_page_size_pts(doc: fitz.Document):
 def get_pdf_textlen_per_page(doc: fitz.Document):
     text_len_lst = []
     for page in doc:
-
         # text_block = page.get_text("blocks")
 
         # text_block = page.get_text("words")
         # text_block_len = sum([len(t[4]) for t in text_block])
 
-        text_block = page.get_text('text')
+        text_block = page.get_text("text")
         text_block_len = len(text_block)
         # logger.info(f"page {page.number} text_block_len: {text_block_len}")
         text_len_lst.append(text_block_len)
@@ -184,39 +148,33 @@ def get_pdf_text_layout_per_page(doc: fitz.Document):
 
         vertical_count = 0
         horizontal_count = 0
-        text_dict = page.get_text('dict')
-        if 'blocks' in text_dict:
-            for block in text_dict['blocks']:
-                if 'lines' in block:
-                    for line in block['lines']:
-
-                        x0, y0, x1, y1 = line['bbox']
+        text_dict = page.get_text("dict")
+        if "blocks" in text_dict:
+            for block in text_dict["blocks"]:
+                if "lines" in block:
+                    for line in block["lines"]:
+                        x0, y0, x1, y1 = line["bbox"]
 
                         width = x1 - x0
                         height = y1 - y0
 
                         area = width * height
                         font_sizes = []
-                        for span in line['spans']:
-                            if 'size' in span:
-                                font_sizes.append(span['size'])
+                        for span in line["spans"]:
+                            if "size" in span:
+                                font_sizes.append(span["size"])
                         if len(font_sizes) > 0:
                             average_font_size = sum(font_sizes) / len(font_sizes)
                         else:
-                            average_font_size = (
-                                10
-                            )
-                        if (
-                            area <= average_font_size**2
-                        ):
+                            average_font_size = 10
+                        if area <= average_font_size**2:
                             continue
                         else:
-                            if 'wmode' in line:
-                                if line['wmode'] == 1:
+                            if "wmode" in line:
+                                if line["wmode"] == 1:
                                     vertical_count += 1
-                                elif line['wmode'] == 0:
+                                elif line["wmode"] == 0:
                                     horizontal_count += 1
-
 
                         #         dir_value = line['dir']
                         #         cosine, sine = dir_value
@@ -236,19 +194,19 @@ def get_pdf_text_layout_per_page(doc: fitz.Document):
         # print(f"page_id: {page_id}, vertical_count: {vertical_count}, horizontal_count: {horizontal_count}")
 
         if vertical_count == 0 and horizontal_count == 0:
-            text_layout_list.append('unknow')
+            text_layout_list.append("unknow")
             continue
         else:
             if vertical_count > horizontal_count:
-                text_layout_list.append('vertical')
+                text_layout_list.append("vertical")
             else:
-                text_layout_list.append('horizontal')
+                text_layout_list.append("horizontal")
         # logger.info(f"page_id: {page_id}, vertical_count: {vertical_count}, horizontal_count: {horizontal_count}")
     return text_layout_list
 
 
 class PageSvgsTooManyError(Exception):
-    def __init__(self, message='Page SVGs are too many'):
+    def __init__(self, message="Page SVGs are too many"):
         self.message = message
         super().__init__(self.message)
 
@@ -283,12 +241,11 @@ def get_language(doc: fitz.Document):
         if page_id >= scan_max_page:
             break
 
-        text_block = page.get_text('text')
+        text_block = page.get_text("text")
         page_language = detect_lang(text_block)
         language_lst.append(page_language)
 
         # logger.info(f"page_id: {page_id}, page_language: {page_language}")
-
 
     count_dict = Counter(language_lst)
 
@@ -302,13 +259,13 @@ def check_invalid_chars(pdf_bytes):
 
 
 def pdf_meta_scan(pdf_bytes: bytes):
-    doc = fitz.open('pdf', pdf_bytes)
+    doc = fitz.open("pdf", pdf_bytes)
     is_needs_password = doc.needs_pass
     is_encrypted = doc.is_encrypted
     total_page = len(doc)
     if total_page == 0:
-        logger.warning(f'drop this pdf, drop_reason: {DropReason.EMPTY_PDF}')
-        result = {'_need_drop': True, '_drop_reason': DropReason.EMPTY_PDF}
+        logger.warning(f"drop this pdf, drop_reason: {DropReason.EMPTY_PDF}")
+        result = {"_need_drop": True, "_drop_reason": DropReason.EMPTY_PDF}
         return result
     else:
         page_width_pts, page_height_pts = get_pdf_page_size_pts(doc)
@@ -319,9 +276,7 @@ def pdf_meta_scan(pdf_bytes: bytes):
         imgs_per_page = get_imgs_per_page(doc)
         # logger.info(f"imgs_per_page: {imgs_per_page}")
 
-        image_info_per_page, junk_img_bojids = get_image_info(
-            doc, page_width_pts, page_height_pts
-        )
+        image_info_per_page, junk_img_bojids = get_image_info(doc, page_width_pts, page_height_pts)
         # logger.info(f"image_info_per_page: {image_info_per_page}, junk_img_bojids: {junk_img_bojids}")
         text_len_per_page = get_pdf_textlen_per_page(doc)
         # logger.info(f"text_len_per_page: {text_len_per_page}")
@@ -332,30 +287,28 @@ def pdf_meta_scan(pdf_bytes: bytes):
         invalid_chars = check_invalid_chars(pdf_bytes)
         # logger.info(f"invalid_chars: {invalid_chars}")
 
-
         res = {
-            'is_needs_password': is_needs_password,
-            'is_encrypted': is_encrypted,
-            'total_page': total_page,
-            'page_width_pts': int(page_width_pts),
-            'page_height_pts': int(page_height_pts),
-            'image_info_per_page': image_info_per_page,
-            'text_len_per_page': text_len_per_page,
-            'text_layout_per_page': text_layout_per_page,
-            'text_language': text_language,
+            "is_needs_password": is_needs_password,
+            "is_encrypted": is_encrypted,
+            "total_page": total_page,
+            "page_width_pts": int(page_width_pts),
+            "page_height_pts": int(page_height_pts),
+            "image_info_per_page": image_info_per_page,
+            "text_len_per_page": text_len_per_page,
+            "text_layout_per_page": text_layout_per_page,
+            "text_language": text_language,
             # "svgs_per_page": svgs_per_page,
-            'imgs_per_page': imgs_per_page,
-            'junk_img_bojids': junk_img_bojids,
-            'invalid_chars': invalid_chars,
-            'metadata': doc.metadata,
+            "imgs_per_page": imgs_per_page,
+            "junk_img_bojids": junk_img_bojids,
+            "invalid_chars": invalid_chars,
+            "metadata": doc.metadata,
         }
         # logger.info(json.dumps(res, ensure_ascii=False))
         return res
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pass
-
 
     # "D:\project/20231108code-clean\pdf_cost_time\scihub\scihub_86800000\libgen.scimag86880000-86880999.zip_10.1021/acsami.1c03109.s002.pdf"
     # "D:/project/20231108code-clean/pdf_cost_time/scihub/scihub_18600000/libgen.scimag18645000-18645999.zip_10.1021/om3006239.pdf"

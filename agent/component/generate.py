@@ -93,12 +93,14 @@ class Generate(ComponentBase):
         if "empty_response" in retrieval_res.columns:
             retrieval_res["empty_response"].fillna("", inplace=True)
         chunks = json.loads(retrieval_res["chunks"][0])
-        answer, idx = settings.retrievaler.insert_citations(answer,
-                                                            [ck["content_ltks"] for ck in chunks],
-                                                            [ck["vector"] for ck in chunks],
-                                                            LLMBundle(self._canvas.get_tenant_id(), LLMType.EMBEDDING,
-                                                                      self._canvas.get_embedding_model()), tkweight=0.7,
-                                                            vtweight=0.3)
+        answer, idx = settings.retrievaler.insert_citations(
+            answer,
+            [ck["content_ltks"] for ck in chunks],
+            [ck["vector"] for ck in chunks],
+            LLMBundle(self._canvas.get_tenant_id(), LLMType.EMBEDDING, self._canvas.get_embedding_model()),
+            tkweight=0.7,
+            vtweight=0.3,
+        )
         doc_ids = set([])
         recall_docs = []
         for i in idx:
@@ -112,10 +114,7 @@ class Generate(ComponentBase):
             del c["vector"]
             del c["content_ltks"]
 
-        reference = {
-            "chunks": chunks,
-            "doc_aggs": recall_docs
-        }
+        reference = {"chunks": chunks, "doc_aggs": recall_docs}
 
         if answer.lower().find("invalid key") >= 0 or answer.lower().find("invalid api") >= 0:
             answer += " Please set LLM API-Key in 'User Setting -> Model providers -> API-Key'"
@@ -152,10 +151,7 @@ class Generate(ComponentBase):
         if len(self._param.llm_enabled_tools) > 0:
             tools = GlobalPluginManager.get_llm_tools_by_names(self._param.llm_enabled_tools)
 
-            chat_mdl.bind_tools(
-                LLMToolPluginCallSession(),
-                [llm_tool_metadata_to_openai_tool(t.get_metadata()) for t in tools]
-            )
+            chat_mdl.bind_tools(LLMToolPluginCallSession(), [llm_tool_metadata_to_openai_tool(t.get_metadata()) for t in tools])
 
         prompt = self._param.prompt
 
@@ -167,8 +163,7 @@ class Generate(ComponentBase):
                 for p in self._canvas.get_component(cpn_id)["obj"]._param.query:
                     if p["key"] == key:
                         kwargs[para["key"]] = p.get("value", "")
-                        self._param.inputs.append(
-                            {"component_id": para["key"], "content": kwargs[para["key"]]})
+                        self._param.inputs.append({"component_id": para["key"], "content": kwargs[para["key"]]})
                         break
                 else:
                     assert False, f"Can't find parameter '{key}' for {cpn_id}"
@@ -203,13 +198,11 @@ class Generate(ComponentBase):
 
         if not self._param.inputs and prompt.find("{input}") >= 0:
             retrieval_res = self.get_input()
-            input = ("  - " + "\n  - ".join(
-                [c for c in retrieval_res["content"] if isinstance(c, str)])) if "content" in retrieval_res else ""
+            input = ("  - " + "\n  - ".join([c for c in retrieval_res["content"] if isinstance(c, str)])) if "content" in retrieval_res else ""
             prompt = re.sub(r"\{input\}", re.escape(input), prompt)
 
         downstreams = self._canvas.get_component(self._id)["downstream"]
-        if kwargs.get("stream") and len(downstreams) == 1 and self._canvas.get_component(downstreams[0])[
-            "obj"].component_name.lower() == "answer":
+        if kwargs.get("stream") and len(downstreams) == 1 and self._canvas.get_component(downstreams[0])["obj"].component_name.lower() == "answer":
             return partial(self.stream_output, chat_mdl, prompt, retrieval_res)
 
         if "empty_response" in retrieval_res.columns and not "".join(retrieval_res["content"]):
@@ -225,7 +218,7 @@ class Generate(ComponentBase):
             msg.append({"role": "user", "content": "Output: "})
         ans = chat_mdl.chat(msg[0]["content"], msg[1:], self._param.gen_conf())
         ans = re.sub(r"^.*</think>", "", ans, flags=re.DOTALL)
-        self._canvas.set_component_infor(self._id, {"prompt":msg[0]["content"],"messages":  msg[1:],"conf":  self._param.gen_conf()})
+        self._canvas.set_component_infor(self._id, {"prompt": msg[0]["content"], "messages": msg[1:], "conf": self._param.gen_conf()})
         if self._param.cite and "chunks" in retrieval_res.columns:
             res = self.set_cite(retrieval_res, ans)
             return pd.DataFrame([res])
@@ -242,7 +235,7 @@ class Generate(ComponentBase):
             return
 
         msg = self._canvas.get_history(self._param.message_history_window_size)
-        if msg and msg[0]['role'] == 'assistant':
+        if msg and msg[0]["role"] == "assistant":
             msg.pop(0)
         if len(msg) < 1:
             msg.append({"role": "user", "content": "Output: "})
@@ -258,7 +251,7 @@ class Generate(ComponentBase):
         if self._param.cite and "chunks" in retrieval_res.columns:
             res = self.set_cite(retrieval_res, answer)
             yield res
-        self._canvas.set_component_infor(self._id, {"prompt":msg[0]["content"],"messages":  msg[1:],"conf":  self._param.gen_conf()})
+        self._canvas.set_component_infor(self._id, {"prompt": msg[0]["content"], "messages": msg[1:], "conf": self._param.gen_conf()})
         self.set_output(Generate.be_output(res))
 
     def debug(self, **kwargs):

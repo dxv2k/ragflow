@@ -19,10 +19,10 @@ from agent.component.base import ComponentBase, ComponentParamBase
 
 
 class BeginParam(ComponentParamBase):
-
     """
     Define the Begin component parameters.
     """
+
     def __init__(self):
         super().__init__()
         self.prologue = "Hi! I'm your smart assistant. What can I do for you?"
@@ -44,6 +44,3 @@ class Begin(ComponentBase):
         res = {"content": self._param.prologue}
         yield res
         self.set_output(self.be_output(res))
-
-
-

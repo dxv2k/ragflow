@@ -5,8 +5,8 @@ English | [简体中文](./README_zh.md)
 
 ## Introduction
 
-*Graph* is a mathematical concept which is composed of nodes and edges. 
-It is used to compose a complex work flow or agent. 
+*Graph* is a mathematical concept which is composed of nodes and edges.
+It is used to compose a complex work flow or agent.
 And this graph is beyond the DAG that we can use circles to describe our agent or work flow.
 Under this folder, we propose a test tool ./test/client.py which can test the DSLs such as json files in folder ./test/dsl_examples.
 Please use this client at the same folder you start RAGFlow. If it's run by Docker, please go into the container before running the client.
@@ -42,4 +42,3 @@ options:
 <div align="center" style="margin-top:20px;margin-bottom:20px;">
 <img src="https://github.com/infiniflow/ragflow/assets/12318111/0a731534-cac8-49fd-8a92-ca247eeef66d" width="600"/>
 </div>
-

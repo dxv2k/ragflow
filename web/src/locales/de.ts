@@ -248,7 +248,7 @@ export default {
       book: `<p>Unterstützte Dateiformate sind <b>DOCX</b>, <b>PDF</b>, <b>TXT</b>.</p><p>
         Für jedes Buch im PDF-Format stellen Sie bitte die <i>Seitenbereiche</i> ein, um unerwünschte Informationen zu entfernen und die Analysezeit zu reduzieren.</p>`,
       laws: `<p>Unterstützte Dateiformate sind <b>DOCX</b>, <b>PDF</b>, <b>TXT</b>.</p><p>
-        Rechtliche Dokumente folgen in der Regel einem strengen Schreibformat. Wir verwenden Textmerkmale, um Teilungspunkte zu identifizieren. 
+        Rechtliche Dokumente folgen in der Regel einem strengen Schreibformat. Wir verwenden Textmerkmale, um Teilungspunkte zu identifizieren.
         </p><p>
         Der Chunk hat eine Granularität, die mit 'ARTIKEL' übereinstimmt, wobei sichergestellt wird, dass der gesamte übergeordnete Text im Chunk enthalten ist.
         </p>`,
@@ -262,7 +262,7 @@ export default {
         <li>Dann werden benachbarte Segmente kombiniert, bis die Token-Anzahl den durch 'Chunk-Token-Anzahl' festgelegten Schwellenwert überschreitet, woraufhin ein Chunk erstellt wird.</li></p>`,
       paper: `<p>Nur <b>PDF</b>-Dateien werden unterstützt.</p><p>
         Papers werden nach Abschnitten wie <i>abstract, 1.1, 1.2</i> aufgeteilt. </p><p>
-        Dieser Ansatz ermöglicht es dem LLM, das Paper effektiver zusammenzufassen und umfassendere, verständlichere Antworten zu liefern. 
+        Dieser Ansatz ermöglicht es dem LLM, das Paper effektiver zusammenzufassen und umfassendere, verständlichere Antworten zu liefern.
         Es erhöht jedoch auch den Kontext für KI-Gespräche und die Rechenkosten für das LLM. Daher sollten Sie während eines Gesprächs erwägen, den Wert von '<b>topN</b>' zu reduzieren.</p>`,
       presentation: `<p>Unterstützte Dateiformate sind <b>PDF</b>, <b>PPTX</b>.</p><p>
         Jede Seite in den Folien wird als Chunk behandelt, wobei ihr Vorschaubild gespeichert wird.</p><p>
@@ -320,7 +320,7 @@ export default {
       Anwendbar, wenn Sie das LLM das gesamte Dokument zusammenfassen lassen möchten, vorausgesetzt, es kann mit dieser Kontextlänge umgehen.
       </p>`,
       knowledgeGraph: `<p>Unterstützte Dateiformate sind <b>DOCX, EXCEL, PPT, IMAGE, PDF, TXT, MD, JSON, EML</b>
-  
+
   <p>Dieser Ansatz teilt Dateien mit der 'naiven'/'Allgemeinen' Methode auf. Er teilt ein Dokument in Segmente und kombiniert dann benachbarte Segmente, bis die Token-Anzahl den durch 'Chunk-Token-Anzahl' festgelegten Schwellenwert überschreitet, woraufhin ein Chunk erstellt wird.</p>
   <p>Die Chunks werden dann dem LLM zugeführt, um Entitäten und Beziehungen für einen Wissensgraphen und eine Mind Map zu extrahieren.</p>
   <p>Stellen Sie sicher, dass Sie die <b>Entitätstypen</b> festlegen.</p>`,

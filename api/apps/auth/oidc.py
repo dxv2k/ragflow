@@ -30,18 +30,19 @@ class OIDCClient(OAuthClient):
             raise ValueError("Missing issuer in configuration.")
 
         oidc_metadata = self._load_oidc_metadata(self.issuer)
-        config.update({
-            'issuer': oidc_metadata['issuer'],
-            'jwks_uri': oidc_metadata['jwks_uri'], 
-            'authorization_url': oidc_metadata['authorization_endpoint'],
-            'token_url': oidc_metadata['token_endpoint'],
-            'userinfo_url': oidc_metadata['userinfo_endpoint']
-        })
+        config.update(
+            {
+                "issuer": oidc_metadata["issuer"],
+                "jwks_uri": oidc_metadata["jwks_uri"],
+                "authorization_url": oidc_metadata["authorization_endpoint"],
+                "token_url": oidc_metadata["token_endpoint"],
+                "userinfo_url": oidc_metadata["userinfo_endpoint"],
+            }
+        )
 
         super().__init__(config)
-        self.issuer = config['issuer']
-        self.jwks_uri = config['jwks_uri']
-
+        self.issuer = config["issuer"]
+        self.jwks_uri = config["jwks_uri"]
 
     def _load_oidc_metadata(self, issuer):
         """
@@ -55,7 +56,6 @@ class OIDCClient(OAuthClient):
         except requests.exceptions.RequestException as e:
             raise ValueError(f"Failed to fetch OIDC metadata: {e}")
 
-
     def parse_id_token(self, id_token):
         """
         Parse and validate OIDC ID Token (JWT format) with signature verification.
@@ -63,7 +63,7 @@ class OIDCClient(OAuthClient):
         try:
             # Decode JWT header without verifying signature
             headers = jwt.get_unverified_header(id_token)
-            
+
             # OIDC usually uses `RS256` for signing
             alg = headers.get("alg", "RS256")
 
@@ -76,14 +76,13 @@ class OIDCClient(OAuthClient):
             decoded_token = jwt.decode(
                 id_token,
                 key=signing_key,
-                algorithms=[alg],  
+                algorithms=[alg],
                 audience=str(self.client_id),
                 issuer=self.issuer,
             )
             return decoded_token
         except Exception as e:
             raise ValueError(f"Error parsing ID Token: {e}")
-
 
     def fetch_user_info(self, access_token, id_token=None, **kwargs):
         """
@@ -94,7 +93,6 @@ class OIDCClient(OAuthClient):
             user_info = self.parse_id_token(id_token)
         user_info.update(super().fetch_user_info(access_token).to_dict())
         return self.normalize_user_info(user_info)
-
 
     def normalize_user_info(self, user_info):
         return super().normalize_user_info(user_info)

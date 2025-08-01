@@ -26,4 +26,3 @@ body:
       description: A clear and concise description of implementation you've considered or investigated.
     validations:
       required: false
-

@@ -293,7 +293,7 @@ docker build --platform linux/amd64 -f Dockerfile -t infiniflow/ragflow:nightly 
    ```
 
 5. オペレーティングシステムにjemallocがない場合は、次のようにインストールします:
-   
+
    ```bash
    # ubuntu
    sudo apt-get install libjemalloc-dev
