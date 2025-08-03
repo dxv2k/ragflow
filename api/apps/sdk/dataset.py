@@ -128,6 +128,18 @@ def create(tenant_id):
         logging.exception(e)
         return get_error_data_result(message="Database operation failed")
 
+    # Handle parser_engine selection
+    if req.get("parser_engine"):
+        # Store parser_engine choice in parser_config for processing logic
+        if isinstance(req["parser_config"], dict):
+            req["parser_config"]["parser_engine"] = req["parser_engine"]
+        else:
+            req["parser_config"] = {"parser_engine": req["parser_engine"]}
+
+        # If MonkeyOCR engine is selected, override parser_id to monkeyocr
+        if req["parser_engine"] == "monkeyocr":
+            req["parser_id"] = "monkeyocr"
+
     req["parser_config"] = get_parser_config(req["parser_id"], req["parser_config"])
     req["id"] = get_uuid()
     req["tenant_id"] = tenant_id
