@@ -69,6 +69,10 @@ class MonkeyOCRParserMock:
             Dict with parsing results
         """
         try:
+            # Check if file exists first
+            if not os.path.exists(file_path):
+                return {"success": False, "error": f"File not found: {file_path}", "file_path": file_path}
+            
             if output_dir is None:
                 # Create temporary output directory
                 output_dir = tempfile.mkdtemp(prefix="monkeyocr_")
@@ -235,7 +239,8 @@ class MonkeyOCRParserMock:
                 return False
 
             file_ext = Path(file_path).suffix.lower()
-            return file_ext in self.get_supported_formats()
+            supported_formats = self.get_supported_formats()
+            return file_ext in supported_formats
 
         except Exception as e:
             logger.error(f"Failed to validate file: {e}")
@@ -305,31 +310,54 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             safe_callback(0.8, "Converting to RAGFlow chunks...")
 
             # Convert to RAGFlow format
-            from rag.nlp import tokenize, rag_tokenizer
-            import re
+            try:
+                from rag.nlp import tokenize, rag_tokenizer
+                import re
 
-            content = result.get("content", "")
-            if not content:
-                content = f"MonkeyOCR processed: {filename}"
+                content = result.get("content", "")
+                if not content:
+                    content = f"MonkeyOCR processed: {filename}"
 
-            # Create RAGFlow chunk
-            doc = {
-                "docnm_kwd": filename, 
-                "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), 
-                "doc_type_kwd": "monkeyocr"
-            }
+                # Create RAGFlow chunk
+                doc = {
+                    "docnm_kwd": filename, 
+                    "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), 
+                    "doc_type_kwd": "monkeyocr"
+                }
 
-            # Tokenize content
-            eng = lang.lower() == "english"
-            tokenize(doc, content, eng)
+                # Tokenize content
+                eng = lang.lower() == "english"
+                tokenize(doc, content, eng)
 
-            safe_callback(1.0, "MonkeyOCR processing complete (MOCK)")
+                safe_callback(1.0, "MonkeyOCR processing complete (MOCK)")
 
-            # Cleanup temporary file
-            if binary and os.path.exists(temp_path):
-                os.unlink(temp_path)
+                # Cleanup temporary file
+                if binary and os.path.exists(temp_path):
+                    os.unlink(temp_path)
 
-            return [doc]
+                return [doc]
+            except ImportError:
+                # Fallback if rag.nlp is not available
+                safe_callback(0.9, "Using fallback chunk format...")
+                
+                content = result.get("content", f"MonkeyOCR processed: {filename}")
+                
+                # Create simple chunk format
+                doc = {
+                    "docnm_kwd": filename,
+                    "title_tks": [filename.replace(".", " ").split()],
+                    "doc_type_kwd": "monkeyocr",
+                    "content": content,
+                    "content_tks": content.split()
+                }
+                
+                safe_callback(1.0, "MonkeyOCR processing complete (MOCK) - Fallback mode")
+                
+                # Cleanup temporary file
+                if binary and os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                
+                return [doc]
         else:
             safe_callback(-1, f"MonkeyOCR failed: {result.get('error', 'Unknown error')}")
             return []
