@@ -10,7 +10,6 @@ from pathlib import Path
 import tempfile
 
 from flask import request, jsonify
-from flask_login import login_required
 
 from api.db.services.monkeyocr_service import MonkeyOCRService
 from api.utils import get_uuid
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @manager.route("/info", methods=["GET"])  # noqa: F821
-@login_required
+# @login_required
 def get_parser_info():
     """Get MonkeyOCR parser information"""
     try:
@@ -31,7 +30,7 @@ def get_parser_info():
 
 
 @manager.route("/register", methods=["POST"])  # noqa: F821
-@login_required
+# @login_required
 def register_parser():
     """Register MonkeyOCR parser with tenant"""
     try:
@@ -51,7 +50,7 @@ def register_parser():
 
 
 @manager.route("/unregister", methods=["POST"])  # noqa: F821
-@login_required
+# @login_required
 def unregister_parser():
     """Unregister MonkeyOCR parser from tenant"""
     try:
@@ -71,7 +70,7 @@ def unregister_parser():
 
 
 @manager.route("/available/<tenant_id>", methods=["GET"])  # noqa: F821
-@login_required
+# @login_required
 def check_parser_availability(tenant_id):
     """Check if MonkeyOCR parser is available for tenant"""
     try:
@@ -85,7 +84,7 @@ def check_parser_availability(tenant_id):
 
 
 @manager.route("/parse", methods=["POST"])  # noqa: F821
-@login_required
+# @login_required
 def parse_document():
     """Parse document using MonkeyOCR"""
     try:
@@ -130,7 +129,7 @@ def parse_document():
 
 
 @manager.route("/extract-text", methods=["POST"])  # noqa: F821
-@login_required
+# @login_required
 def extract_text_from_images():
     """Extract text from images using MonkeyOCR"""
     try:
@@ -157,7 +156,7 @@ def extract_text_from_images():
 
 
 @manager.route("/supported-formats", methods=["GET"])  # noqa: F821
-@login_required
+# @login_required
 def get_supported_formats():
     """Get supported file formats"""
     try:
@@ -171,7 +170,7 @@ def get_supported_formats():
 
 
 @manager.route("/validate-file", methods=["POST"])  # noqa: F821
-@login_required
+# @login_required
 def validate_file():
     """Validate if file can be processed by MonkeyOCR"""
     try:
@@ -194,7 +193,7 @@ def validate_file():
 
 
 @manager.route("/parsing-options", methods=["GET"])  # noqa: F821
-@login_required
+# @login_required
 def get_parsing_options():
     """Get available parsing options"""
     try:

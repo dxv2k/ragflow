@@ -2,18 +2,25 @@
 """
 MonkeyOCR Parser for RAGFlow Integration
 Integrates CEDD OCR service with RAGFlow document processing
+Follows exact flow from cedd_parse.py
 """
 
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 # Add monkeyocr to path for CEDD OCR service
-monkeyocr_path = Path(__file__).parent.parent / "monkeyocr"
+import sys
 
+project_root = Path(__file__).parent.parent.parent
+monkeyocr_path = project_root / "monkeyocr"
+sys.path.insert(0, str(monkeyocr_path))
+
+# Import the actual cedd_parse function
+from monkeyocr.cedd_parse import cedd_parse
 from monkeyocr.magic_pdf.model.custom_model import MonkeyOCR
-from monkeyocr.parse import parse_file, single_task_recognition
 
 logger = logging.getLogger(__name__)
 
@@ -39,67 +46,104 @@ class MonkeyOCRParser:
             logger.error(f"Failed to initialize MonkeyOCR model: {e}")
             raise
 
-    def parse_document(self, file_path: str, output_dir: Optional[str] = None, split_pages: bool = False, pred_abandon: bool = False, **kwargs) -> Dict[str, Any]:
-        """Parse document using MonkeyOCR"""
+    def parse_document(self, file_path: str, output_dir: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        """
+        Parse document using MonkeyOCR following exact cedd_parse.py flow
+
+        Args:
+            file_path: Input file path
+            output_dir: Output directory (optional)
+            **kwargs: Additional arguments
+
+        Returns:
+            Dict with parsing results
+        """
         try:
             if output_dir is None:
-                output_dir = os.path.join(os.path.dirname(file_path), "parsed_output")
+                # Create temporary output directory
+                output_dir = tempfile.mkdtemp(prefix="monkeyocr_")
 
-            os.makedirs(output_dir, exist_ok=True)
+            logger.info("Starting MonkeyOCR parsing with cedd_parse flow")
+            logger.info(f"Input file: {file_path}")
+            logger.info(f"Output directory: {output_dir}")
 
-            # Use CEDD OCR service to parse the document
-            result_dir = parse_file(input_file=file_path, output_dir=output_dir, MonkeyOCR_model=self.monkey_ocr_model, split_pages=split_pages, pred_abandon=pred_abandon)
+            # Use cedd_parse with 'full' mode (default)
+            enhanced_md_path = cedd_parse(input_pdf=file_path, output_dir=output_dir, config_path=self.config_path, MonkeyOCR_model=self.monkey_ocr_model, mode="full")
 
-            # Read the parsed content
-            content = self._read_parsed_content(result_dir)
+            # Read the enhanced markdown content
+            content = self._read_enhanced_markdown(enhanced_md_path)
 
-            return {"success": True, "parsed_dir": result_dir, "content": content, "content_list": [content] if content else [], "file_path": file_path}
+            logger.info("MonkeyOCR processing completed successfully")
+
+            return {"success": True, "parsed_dir": output_dir, "enhanced_md_path": enhanced_md_path, "content": content, "content_list": [content] if content else [], "file_path": file_path}
 
         except Exception as e:
             logger.error(f"Failed to parse document {file_path}: {e}")
             return {"success": False, "error": str(e), "file_path": file_path}
 
-    def _read_parsed_content(self, result_dir: str) -> str:
-        """Read parsed content from result directory"""
+    def _read_enhanced_markdown(self, md_path: str) -> str:
+        """Read enhanced markdown content from cedd_parse output"""
         try:
-            # Look for markdown files in the result directory
-            md_files = list(Path(result_dir).glob("*.md"))
-            if md_files:
-                with open(md_files[0], "r", encoding="utf-8") as f:
+            if os.path.exists(md_path):
+                with open(md_path, "r", encoding="utf-8") as f:
                     return f.read()
-
-            # Look for text files
-            txt_files = list(Path(result_dir).glob("*.txt"))
-            if txt_files:
-                with open(txt_files[0], "r", encoding="utf-8") as f:
-                    return f.read()
-
+            else:
+                logger.warning(f"Enhanced markdown file not found: {md_path}")
+                return ""
+        except Exception as e:
+            logger.error(f"Failed to read enhanced markdown: {e}")
             return ""
 
-        except Exception as e:
-            logger.error(f"Failed to read parsed content: {e}")
-            return ""
-
-    def extract_text_from_images(self, image_paths: List[str], task: str = "text") -> Dict[str, str]:
-        """Extract text from images using MonkeyOCR"""
+    def parse_only(self, file_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Parse only mode - extract images and layout without OCR
+        Follows cedd_parse.py parse_only mode
+        """
         try:
-            results = {}
-            for image_path in image_paths:
-                if not os.path.exists(image_path):
-                    logger.warning(f"Image file not found: {image_path}")
-                    continue
+            if output_dir is None:
+                output_dir = tempfile.mkdtemp(prefix="monkeyocr_parse_")
 
-                # Use single task recognition for text extraction
-                result_dir = single_task_recognition(input_file=image_path, output_dir=os.path.dirname(image_path), MonkeyOCR_model=self.monkey_ocr_model, task=task)
+            logger.info("Starting parse_only mode")
+            logger.info(f"Input file: {file_path}")
+            logger.info(f"Output directory: {output_dir}")
 
-                content = self._read_parsed_content(result_dir)
-                results[image_path] = content
+            # Use cedd_parse with parse_only mode
+            parsed_dir = cedd_parse(input_pdf=file_path, output_dir=output_dir, config_path=self.config_path, MonkeyOCR_model=self.monkey_ocr_model, mode="parse_only")
 
-            return results
+            logger.info("Parse only mode completed successfully")
+
+            return {"success": True, "parsed_dir": parsed_dir, "file_path": file_path}
 
         except Exception as e:
-            logger.error(f"Failed to extract text from images: {e}")
-            return {}
+            logger.error(f"Parse only mode failed: {e}")
+            return {"success": False, "error": str(e), "file_path": file_path}
+
+    def ocr_only(self, parsed_folder: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
+        """
+        OCR only mode - run OCR/OMR on already parsed folder
+        Follows cedd_parse.py ocr_only mode
+        """
+        try:
+            if output_dir is None:
+                output_dir = tempfile.mkdtemp(prefix="monkeyocr_ocr_")
+
+            logger.info(f"Starting ocr_only mode on folder: {parsed_folder}")
+            logger.info(f"Parsed folder: {parsed_folder}")
+            logger.info(f"Output directory: {output_dir}")
+
+            # Use cedd_parse with ocr_only mode
+            enhanced_md_path = cedd_parse(output_dir=output_dir, config_path=self.config_path, MonkeyOCR_model=self.monkey_ocr_model, parsed_folder=parsed_folder, mode="ocr_only")
+
+            # Read the enhanced markdown content
+            content = self._read_enhanced_markdown(enhanced_md_path)
+
+            logger.info("OCR only mode completed successfully")
+
+            return {"success": True, "enhanced_md_path": enhanced_md_path, "content": content, "parsed_folder": parsed_folder}
+
+        except Exception as e:
+            logger.error(f"OCR only mode failed: {e}")
+            return {"success": False, "error": str(e), "parsed_folder": parsed_folder}
 
     def get_supported_formats(self) -> List[str]:
         """Get supported file formats"""
@@ -112,7 +156,8 @@ class MonkeyOCRParser:
                 return False
 
             file_ext = Path(file_path).suffix.lower()
-            return file_ext in self.get_supported_formats()
+            supported_formats = self.get_supported_formats()
+            return file_ext in supported_formats
 
         except Exception as e:
             logger.error(f"Failed to validate file: {e}")
@@ -120,12 +165,20 @@ class MonkeyOCRParser:
 
     def get_parsing_options(self) -> Dict[str, Any]:
         """Get available parsing options"""
-        return {"split_pages": False, "pred_abandon": False, "extract_images": True, "generate_layout_pdf": True, "generate_spans_pdf": True}
+        return {
+            "mode": "full",  # full, parse_only, ocr_only
+            "split_pages": False,
+            "pred_abandon": False,
+            "extract_images": True,
+            "generate_layout_pdf": True,
+            "generate_spans_pdf": True,
+        }
 
 
 def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", callback=None, **kwargs):
     """
     MonkeyOCR chunk function for RAGFlow integration.
+    Follows exact cedd_parse.py flow with 'full' mode.
 
     Args:
         filename (str): File name
@@ -145,51 +198,73 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             callback(progress, message)
 
     try:
-        safe_callback(0.1, "Starting MonkeyOCR processing...")
+        safe_callback(0.1, "Starting MonkeyOCR processing with cedd_parse flow...")
 
         # Create MonkeyOCR parser instance
         parser = MonkeyOCRParser()
 
         # Save binary to temporary file if needed
         if binary:
-            import tempfile
-
             with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp_file:
                 tmp_file.write(binary)
                 temp_path = tmp_file.name
         else:
             temp_path = filename
 
-        safe_callback(0.3, "Processing document with MonkeyOCR...")
+        safe_callback(0.2, "Validating file format...")
 
-        # Parse document
+        # Validate file format
+        if not parser.validate_file(temp_path):
+            safe_callback(-1, f"Unsupported file format: {filename}")
+            return []
+
+        safe_callback(0.3, "Processing document with cedd_parse full mode...")
+
+        # Parse document using cedd_parse full mode
         result = parser.parse_document(temp_path)
 
         if result.get("success"):
             safe_callback(0.8, "Converting to RAGFlow chunks...")
 
             # Convert to RAGFlow format
-            from rag.nlp import tokenize, rag_tokenizer
-            import re
+            try:
+                from rag.nlp import tokenize, rag_tokenizer
+                import re
 
-            content = result.get("content", "")
-            if not content:
-                content = f"MonkeyOCR processed: {filename}"
+                content = result.get("content", "")
+                if not content:
+                    content = f"MonkeyOCR processed: {filename}"
 
-            # Create RAGFlow chunk
-            doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), "doc_type_kwd": "monkeyocr"}
+                # Create RAGFlow chunk
+                doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), "doc_type_kwd": "monkeyocr"}
 
-            # Tokenize content
-            eng = lang.lower() == "english"
-            tokenize(doc, content, eng)
+                # Tokenize content
+                eng = lang.lower() == "english"
+                tokenize(doc, content, eng)
 
-            safe_callback(1.0, "MonkeyOCR processing complete")
+                safe_callback(1.0, "MonkeyOCR processing complete")
 
-            # Cleanup temporary file
-            if binary and os.path.exists(temp_path):
-                os.unlink(temp_path)
+                # Cleanup temporary file
+                if binary and os.path.exists(temp_path):
+                    os.unlink(temp_path)
 
-            return [doc]
+                return [doc]
+            except ImportError:
+                # Fallback if rag.nlp is not available
+                safe_callback(0.9, "Using fallback chunk format...")
+
+                content = result.get("content", f"MonkeyOCR processed: {filename}")
+
+                # Create simple chunk format
+                doc = {"docnm_kwd": filename, "title_tks": [filename.replace(".", " ").split()], "doc_type_kwd": "monkeyocr", "content": content, "content_tks": content.split()}
+
+                safe_callback(1.0, "MonkeyOCR processing complete - Fallback mode")
+
+                # Cleanup temporary file
+                if binary and os.path.exists(temp_path):
+                    os.unlink(temp_path)
+
+                return [doc]
         else:
             safe_callback(-1, f"MonkeyOCR failed: {result.get('error', 'Unknown error')}")
             return []
@@ -209,9 +284,18 @@ class MonkeyOCRFactory:
         return {
             "name": "CEDD OCR Service",
             "version": "1.0.0",
-            "description": "Document parsing with CEDD OCR service",
+            "description": "Document parsing with CEDD OCR service using cedd_parse.py flow",
             "supported_formats": [".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".bmp"],
-            "capabilities": {"document_layout_analysis": True, "text_extraction": True, "formula_recognition": True, "table_extraction": True, "image_ocr": True, "omr_processing": True},
+            "capabilities": {
+                "document_layout_analysis": True,
+                "text_extraction": True,
+                "formula_recognition": True,
+                "table_extraction": True,
+                "image_ocr": True,
+                "omr_processing": True,
+                "cedd_parse_flow": True,
+            },
+            "modes": ["full", "parse_only", "ocr_only"],
         }
 
     @staticmethod

@@ -5,6 +5,7 @@ import time
 from loguru import logger
 
 from magic_pdf.config.constants import MODEL_NAME
+from magic_pdf.utils.timing_utils import get_timing_collector
 from io import BytesIO
 from PIL import Image
 from magic_pdf.model.sub_modules.model_utils import clean_vram, crop_img
@@ -15,6 +16,7 @@ YOLO_LAYOUT_BASE_BATCH_SIZE = 8
 class BatchAnalyzeLLM:
     def __init__(self, model):
         self.model = model
+        self.timing_collector = get_timing_collector()
 
     def __call__(self, images: list, split_pages: bool = False, pred_abandon: bool = False) -> list:
         images_layout_res = []
@@ -28,11 +30,19 @@ class BatchAnalyzeLLM:
                 pil_img = Image.fromarray(image)
                 layout_images.append(pil_img)
 
+            # Detailed timing for YOLO layout model inference
+            yolo_inference_start = time.time()
             images_layout_res += self.model.layout_model.batch_predict(
                 # layout_images, self.batch_ratio * YOLO_LAYOUT_BASE_BATCH_SIZE
                 layout_images,
                 YOLO_LAYOUT_BASE_BATCH_SIZE,
             )
+            yolo_inference_time = time.time() - yolo_inference_start
+
+            # Add timing data to collector
+            self.timing_collector.add_timing("YOLO Layout Model", yolo_inference_time, len(images), {"batch_size": YOLO_LAYOUT_BASE_BATCH_SIZE, "model_type": "DocLayout_YOLO"})
+
+            logger.info(f"YOLO Layout Model Inference Time: {round(yolo_inference_time, 3)}s for {len(images)} images ({round(yolo_inference_time / len(images), 3)}s per image)")
 
             for image_index, useful_list in modified_images:
                 for res in images_layout_res[image_index]:
@@ -48,7 +58,16 @@ class BatchAnalyzeLLM:
             for image_index, image in enumerate(images):
                 pil_img = Image.fromarray(image)
                 paddlex_layout_images.append(pil_img)
+
+            # Detailed timing for PaddleX layout model inference
+            paddlex_inference_start = time.time()
             images_layout_res += self.model.layout_model.batch_predict(paddlex_layout_images, YOLO_LAYOUT_BASE_BATCH_SIZE)
+            paddlex_inference_time = time.time() - paddlex_inference_start
+
+            # Add timing data to collector
+            self.timing_collector.add_timing("PaddleX Layout Model", paddlex_inference_time, len(images), {"batch_size": YOLO_LAYOUT_BASE_BATCH_SIZE, "model_type": "PaddleXLayoutModel"})
+
+            logger.info(f"PaddleX Layout Model Inference Time: {round(paddlex_inference_time, 3)}s for {len(images)} images ({round(paddlex_inference_time / len(images), 3)}s per image)")
         else:
             logger.error(f"Unsupported layout model name: {self.model.layout_model_name}")
             raise ValueError(f"Unsupported layout model name: {self.model.layout_model_name}")
@@ -89,8 +108,20 @@ class BatchAnalyzeLLM:
                     direct_images.append(pil_img)
                     direct_messages.append("""Please output the text content from the image.""")
 
-                # Get direct recognition results
+                # Get direct recognition results with timing
+                direct_inference_start = time.time()
                 direct_results = self.model.chat_model.batch_inference(direct_images, direct_messages)
+                direct_inference_time = time.time() - direct_inference_start
+
+                # Add timing data to collector
+                self.timing_collector.add_timing(
+                    "Qwen2.5VL Direct Inference",
+                    direct_inference_time,
+                    len(direct_images),
+                    {"inference_type": "direct", "model_backend": getattr(self.model.chat_model, "__class__.__name__", "Unknown")},
+                )
+
+                logger.info(f"Qwen2.5VL Direct Inference Time: {round(direct_inference_time, 3)}s for {len(direct_images)} images ({round(direct_inference_time / len(direct_images), 3)}s per image)")
 
                 # Replace layout results for these pages
                 for i, page_idx in enumerate(pages_to_process_directly):
@@ -115,7 +146,19 @@ class BatchAnalyzeLLM:
             new_images_all.extend(new_images)
             cids_all.extend(cids)
             page_idxs.append(len(new_images_all) - len(new_images))
+
+        # Detailed timing for Qwen2.5VL batch inference
+        qwen_inference_start = time.time()
         ocr_result = self.batch_llm_ocr(new_images_all, cids_all)
+        qwen_inference_time = time.time() - qwen_inference_start
+
+        # Add timing data to collector
+        self.timing_collector.add_timing(
+            "Qwen2.5VL Batch Inference", qwen_inference_time, len(new_images_all), {"inference_type": "batch", "model_backend": getattr(self.model.chat_model, "__class__.__name__", "Unknown")}
+        )
+
+        logger.info(f"Qwen2.5VL Batch Inference Time: {round(qwen_inference_time, 3)}s for {len(new_images_all)} regions ({round(qwen_inference_time / len(new_images_all), 3)}s per region)")
+
         for index in range(len(images)):
             ocr_results = []
             layout_res = images_layout_res[index]
