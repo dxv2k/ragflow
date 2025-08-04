@@ -2,6 +2,7 @@
 """
 MonkeyOCR Parser for RAGFlow Integration
 Integrates CEDD OCR service with RAGFlow document processing
+Follows exact flow from cedd_parse.py
 """
 
 import logging
@@ -12,10 +13,15 @@ from typing import Dict, Any, Optional, List
 import json
 
 # Add monkeyocr to path for CEDD OCR service
-monkeyocr_path = Path(__file__).parent.parent / "monkeyocr"
+import sys
 
+project_root = Path(__file__).parent.parent.parent
+monkeyocr_path = project_root / "monkeyocr"
+sys.path.insert(0, str(monkeyocr_path))
+
+# Import the actual cedd_parse function
+from monkeyocr.cedd_parse import cedd_parse
 from monkeyocr.magic_pdf.model.custom_model import MonkeyOCR
-from monkeyocr.parse import parse_file, single_task_recognition
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +168,7 @@ class MonkeyOCRFactory:
         return {
             "name": "CEDD OCR Service",
             "version": "1.0.0",
-            "description": "Document parsing with CEDD OCR service",
+            "description": "Document parsing with CEDD OCR service using cedd_parse.py flow",
             "supported_formats": [".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".bmp"],
             "capabilities": {
                 "document_layout_analysis": True,

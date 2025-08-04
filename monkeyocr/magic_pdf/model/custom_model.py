@@ -5,6 +5,7 @@ from magic_pdf.config.constants import *
 from magic_pdf.model.sub_modules.model_init import AtomModelSingleton
 from magic_pdf.model.model_list import AtomicModel
 from magic_pdf.utils.load_image import load_image, encode_image_base64
+from magic_pdf.utils.timing_utils import get_timing_collector
 from transformers import LayoutLMv3ForTokenClassification
 from loguru import logger
 import yaml
@@ -169,8 +170,41 @@ class MonkeyChat_LMDeploy:
         return engine_config
     
     def batch_inference(self, images, questions):
+        """
+        Perform batch inference using LMDeploy pipeline with detailed timing.
+
+        Args:
+            images: List of images to process
+            questions: List of questions corresponding to each image
+
+        Returns:
+            List of text outputs from the model
+        """
+        import time
+
+        # Prepare inputs with timing
+        input_prep_start = time.time()
         inputs = [(question, load_image(image, max_size=1600)) for image, question in zip(images, questions)]
+        input_prep_time = time.time() - input_prep_start
+
+        # Model inference timing
+        model_inference_start = time.time()
         outputs = self.pipe(inputs, gen_config=self.gen_config)
+        model_inference_time = time.time() - model_inference_start
+
+        # Add timing data to collector
+        self.timing_collector.add_timing(
+            "Qwen2.5VL LMDeploy",
+            model_inference_time,
+            len(images),
+            {"input_prep_time": input_prep_time, "total_time": input_prep_time + model_inference_time, "backend": "LMDeploy", "model_name": self.model_name},
+        )
+
+        # Log detailed timing information
+        logger.info(f"Qwen2.5VL LMDeploy - Input Prep Time: {round(input_prep_time, 3)}s for {len(images)} images")
+        logger.info(f"Qwen2.5VL LMDeploy - Model Inference Time: {round(model_inference_time, 3)}s for {len(images)} images ({round(model_inference_time / len(images), 3)}s per image)")
+        logger.info(f"Qwen2.5VL LMDeploy - Total Batch Time: {round(input_prep_time + model_inference_time, 3)}s for {len(images)} images")
+
         return [output.text for output in outputs]
     
 class MonkeyChat_vLLM:
@@ -194,6 +228,20 @@ class MonkeyChat_vLLM:
         return ratio
 
     def batch_inference(self, images, questions):
+        """
+        Perform batch inference using vLLM with detailed timing.
+
+        Args:
+            images: List of images to process
+            questions: List of questions corresponding to each image
+
+        Returns:
+            List of text outputs from the model
+        """
+        import time
+
+        # Prepare inputs with timing
+        input_prep_start = time.time()
         placeholder = "<|image_pad|>"
         prompts = [
             ("<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
@@ -208,6 +256,21 @@ class MonkeyChat_vLLM:
             }
         } for i in range(len(prompts))]
         outputs = self.pipe.generate(inputs, sampling_params=self.gen_config)
+        model_inference_time = time.time() - model_inference_start
+
+        # Add timing data to collector
+        self.timing_collector.add_timing(
+            "Qwen2.5VL vLLM",
+            model_inference_time,
+            len(images),
+            {"input_prep_time": input_prep_time, "total_time": input_prep_time + model_inference_time, "backend": "vLLM", "model_name": self.model_name},
+        )
+
+        # Log detailed timing information
+        logger.info(f"Qwen2.5VL vLLM - Input Prep Time: {round(input_prep_time, 3)}s for {len(images)} images")
+        logger.info(f"Qwen2.5VL vLLM - Model Inference Time: {round(model_inference_time, 3)}s for {len(images)} images ({round(model_inference_time / len(images), 3)}s per image)")
+        logger.info(f"Qwen2.5VL vLLM - Total Batch Time: {round(input_prep_time + model_inference_time, 3)}s for {len(images)} images")
+
         return [o.outputs[0].text for o in outputs]
 
 class MonkeyChat_transformers:
@@ -315,6 +378,20 @@ class MonkeyChat_transformers:
         return results
     
     def _process_batch(self, batch_images: List[Union[str, Image.Image]], batch_questions: List[str]) -> List[str]:
+        """
+        Process a batch of images and questions using the transformers model with detailed timing.
+
+        Args:
+            batch_images: List of images to process
+            batch_questions: List of questions corresponding to each image
+
+        Returns:
+            List of text outputs from the model
+        """
+        import time
+
+        # Message preparation timing
+        msg_prep_start = time.time()
         all_messages = self.prepare_messages(batch_images, batch_questions)
         
         texts = []
