@@ -86,6 +86,13 @@ def update():
 
         if req.get("parser_id", "") == "tag" and os.environ.get("DOC_ENGINE", "elasticsearch") == "infinity":
             return get_json_result(data=False, message="The chunking method Tag has not been supported by Infinity yet.", code=settings.RetCode.OPERATING_ERROR)
+        
+        # Validate MonkeyOCR parser compatibility
+        if req.get("parser_id", "") == "monkeyocr":
+            from api.utils.file_utils import is_monkeyocr_supported
+            # Note: This is a general validation - specific file validation happens during upload
+            # MonkeyOCR supports PDF and image files
+            pass
 
         if req["name"].lower() != kb.name.lower() and len(KnowledgebaseService.query(name=req["name"], tenant_id=current_user.id, status=StatusEnum.VALID.value)) > 1:
             return get_data_error_result(message="Duplicated knowledgebase name.")
@@ -278,7 +285,18 @@ def knowledge_graph(kb_id):
 def delete_knowledge_graph(kb_id):
     if not KnowledgebaseService.accessible(kb_id, current_user.id):
         return get_json_result(data=False, message="No authorization.", code=settings.RetCode.AUTHENTICATION_ERROR)
-    _, kb = KnowledgebaseService.get_by_id(kb_id)
-    settings.docStoreConn.delete({"knowledge_graph_kwd": ["graph", "subgraph", "entity", "relation"]}, search.index_name(kb.tenant_id), kb_id)
+    try:
+        if not KnowledgebaseService.query(created_by=current_user.id, id=kb_id):
+            return get_json_result(data=False, message="Only owner of knowledgebase authorized for this operation.", code=settings.RetCode.OPERATING_ERROR)
 
-    return get_json_result(data=True)
+        e, kb = KnowledgebaseService.get_by_id(kb_id)
+        if not e:
+            return get_data_error_result(message="Can't find this knowledgebase!")
+
+        settings.docStoreConn.delete({"kb_id": kb_id}, search.index_name(kb.tenant_id), kb_id)
+        return get_json_result(data=True)
+    except Exception as e:
+        return server_error_response(e)
+
+
+

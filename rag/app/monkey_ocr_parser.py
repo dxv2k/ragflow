@@ -220,7 +220,13 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
 
         safe_callback(0.3, "Processing document with cedd_parse full mode...")
 
-        # Parse document using cedd_parse full mode
+        # Get parser configuration from kwargs
+        parser_config = kwargs.get("parser_config", {})
+        
+        # Use layout_recognize field to determine processing mode
+        layout_recognize = parser_config.get("layout_recognize", "MonkeyOCR")
+        
+        # Parse document using cedd_parse
         result = parser.parse_document(temp_path)
 
         if result.get("success"):

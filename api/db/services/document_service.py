@@ -487,7 +487,7 @@ def doc_upload_and_parse(conversation_id, file_objs, user_id):
     from api.db.services.llm_service import LLMBundle
     from api.db.services.user_service import TenantService
     from rag.app import audio, email, naive, picture, presentation
-    from rag.app.monkey_ocr_parser import chunk as monkey_ocr
+    from rag.app import monkey_ocr_parser as monkey_ocr
 
     e, conv = ConversationService.get_by_id(conversation_id)
     if not e:
