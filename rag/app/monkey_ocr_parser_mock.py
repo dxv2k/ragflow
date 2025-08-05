@@ -337,32 +337,10 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         logger.error(f"Error processing {filename}: {e}")
         return []
 
+if __name__ == "__main__":
+    import sys
 
-class MonkeyOCRFactoryMock:
-    """Factory class for creating MonkeyOCR parser instances (MOCK VERSION)"""
+    def dummy(prog=None, msg=""):
+        pass
 
-    @staticmethod
-    def get_parser_info() -> Dict[str, Any]:
-        """Get MonkeyOCR parser information"""
-        return {
-            "name": "CEDD OCR Service (MOCK)",
-            "version": "1.0.0-MOCK",
-            "description": "Document parsing with CEDD OCR service using cedd_parse.py flow (MOCK VERSION FOR TESTING)",
-            "supported_formats": [".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".bmp"],
-            "capabilities": {
-                "document_layout_analysis": True,
-                "text_extraction": True,
-                "formula_recognition": True,
-                "table_extraction": True,
-                "image_ocr": True,
-                "omr_processing": True,
-                "cedd_parse_flow": True,
-                "mock_mode": True,
-            },
-            "modes": ["full", "parse_only", "ocr_only"],
-        }
-
-    @staticmethod
-    def create_parser(config_path: Optional[str] = None) -> MonkeyOCRParserMock:
-        """Create MonkeyOCR parser instance (MOCK)"""
-        return MonkeyOCRParserMock(config_path=config_path)
+    chunk(sys.argv[1], from_page=0, to_page=10, callback=dummy)
