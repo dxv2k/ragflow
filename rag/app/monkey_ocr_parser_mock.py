@@ -283,13 +283,22 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
 
         safe_callback(0.3, "Processing document with cedd_parse full mode (MOCK)...")
 
+        # Get parser configuration from kwargs
+        parser_config = kwargs.get("parser_config", {})
+        
+        # Check if a specific chunking method is requested
+        # The parser_id from the task determines the chunking method
+        chunking_method = kwargs.get("parser_id", "naive")
+        
+        print(f"🔄 [MOCK] Using chunking method: {chunking_method}")
+        
         # Parse document using cedd_parse full mode (MOCK)
         result = parser.parse_document(temp_path)
 
         if result.get("success"):
             safe_callback(0.8, "Converting to RAGFlow chunks...")
 
-            # Convert to RAGFlow format
+            # Convert to RAGFlow format based on chunking method
             try:
                 from rag.nlp import tokenize, rag_tokenizer
                 import re
@@ -298,12 +307,26 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                 if not content:
                     content = f"MonkeyOCR processed: {filename}"
 
-                # Create RAGFlow chunk
-                doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), "doc_type_kwd": "monkeyocr"}
+                # Create RAGFlow chunk based on chunking method
+                doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), "doc_type_kwd": chunking_method}
 
-                # Tokenize content
-                eng = lang.lower() == "english"
-                tokenize(doc, content, eng)
+                # Apply different chunking strategies based on parser_id
+                if chunking_method == "one":
+                    # One chunk per document
+                    eng = lang.lower() == "english"
+                    tokenize(doc, content, eng)
+                elif chunking_method == "naive":
+                    # Naive chunking with token limit
+                    eng = lang.lower() == "english"
+                    tokenize(doc, content, eng)
+                elif chunking_method == "monkeyocr":
+                    # MonkeyOCR specific chunking
+                    eng = lang.lower() == "english"
+                    tokenize(doc, content, eng)
+                else:
+                    # Default to naive chunking
+                    eng = lang.lower() == "english"
+                    tokenize(doc, content, eng)
 
                 safe_callback(1.0, "MonkeyOCR processing complete (MOCK)")
 
