@@ -57,7 +57,7 @@ from api.versions import get_ragflow_version
 from api.db.db_models import close_connection
 from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, email, tag
 # Use mock version for testing - uncomment the real version when ready for production
-from rag.app.monkey_ocr_parser_mock import chunk as monkey_ocr
+from rag.app import monkey_ocr_parser_mock as monkey_ocr
 # from rag.app.monkey_ocr_parser import chunk as monkey_ocr  # REAL VERSION
 from rag.nlp import search, rag_tokenizer
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
