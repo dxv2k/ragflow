@@ -351,4 +351,3 @@ def delete_knowledge_graph(kb_id):
     _, kb = KnowledgebaseService.get_by_id(kb_id)
     settings.docStoreConn.delete({"knowledge_graph_kwd": ["graph", "subgraph", "entity", "relation"]}, search.index_name(kb.tenant_id), kb_id)
 
-    return get_json_result(data=True)
