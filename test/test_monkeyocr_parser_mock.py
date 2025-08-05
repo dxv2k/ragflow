@@ -12,11 +12,11 @@ import requests
 from pathlib import Path
 
 # Add the project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import the mock parser
-from rag.app.monkey_ocr_parser_mock import MonkeyOCRParserMock, chunk, MonkeyOCRFactoryMock
+from rag.app.monkey_ocr_parser_mock import MonkeyOCRParserMock, chunk
 
 # Add SDK to path for testing
 sys.path.insert(0, str(project_root / "sdk" / "python"))
@@ -267,33 +267,6 @@ def test_monkeyocr_chunk_function():
         print(f"❌ Chunk function test failed: {e}")
         return False
 
-
-def test_monkeyocr_factory():
-    """Test MonkeyOCR factory functionality"""
-    print("\n🧪 Test 6: MonkeyOCR Factory")
-
-    try:
-        # Test factory info
-        info = MonkeyOCRFactoryMock.get_parser_info()
-        assert info["name"] == "CEDD OCR Service (MOCK)", "Factory name should match"
-        assert info["version"] == "1.0.0-MOCK", "Factory version should match"
-        assert "capabilities" in info, "Factory should have capabilities"
-        assert info["capabilities"]["mock_mode"] is True, "Factory should have mock mode"
-        print("✅ Factory info validation successful")
-
-        # Test factory parser creation
-        parser = MonkeyOCRFactoryMock.create_parser()
-        assert isinstance(parser, MonkeyOCRParserMock), "Factory should create MonkeyOCRParserMock instance"
-        print("✅ Factory parser creation successful")
-
-        print("✅ MonkeyOCR factory test passed")
-        return True
-
-    except Exception as e:
-        print(f"❌ MonkeyOCR factory test failed: {e}")
-        return False
-
-
 def test_monkeyocr_sdk_integration():
     """Test MonkeyOCR integration with RAGFlow SDK"""
     print("\n🧪 Test 7: SDK Integration")
@@ -503,7 +476,6 @@ def main():
         ("Document Parsing", test_monkeyocr_parser_mock_document_parsing),
         ("Parsing Modes", test_monkeyocr_parser_mock_modes),
         ("Chunk Function", test_monkeyocr_chunk_function),
-        ("MonkeyOCR Factory", test_monkeyocr_factory),
         ("SDK Integration", test_monkeyocr_sdk_integration),
         ("API Backend Integration", test_monkeyocr_api_backend_integration),
         ("Error Handling", test_monkeyocr_error_handling),

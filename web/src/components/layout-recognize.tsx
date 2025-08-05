@@ -8,15 +8,33 @@ import { useMemo } from 'react';
 const enum DocumentType {
   DeepDOC = 'DeepDOC',
   PlainText = 'Plain Text',
+  MonkeyOCR = 'MonkeyOCR',
 }
 
 const LayoutRecognize = () => {
   const { t } = useTranslate('knowledgeDetails');
   const allOptions = useSelectLlmOptionsByModelType();
+  const form = Form.useFormInstance();
+
+  const handleLayoutRecognizeChange = (value: string) => {
+    // When MonkeyOCR is selected, automatically set parser_id to monkeyocr
+    if (value === DocumentType.MonkeyOCR) {
+      form.setFieldValue('parser_id', 'monkeyocr');
+    }
+  };
 
   const options = useMemo(() => {
-    const list = [DocumentType.DeepDOC, DocumentType.PlainText].map((x) => ({
-      label: x === DocumentType.PlainText ? t(camelCase(x)) : 'DeepDoc',
+    const list = [
+      DocumentType.DeepDOC,
+      DocumentType.PlainText,
+      DocumentType.MonkeyOCR,
+    ].map((x) => ({
+      label:
+        x === DocumentType.PlainText
+          ? t(camelCase(x))
+          : x === DocumentType.MonkeyOCR
+            ? 'MonkeyOCR'
+            : 'DeepDoc',
       value: x,
     }));
 
@@ -47,7 +65,11 @@ const LayoutRecognize = () => {
       initialValue={DocumentType.DeepDOC}
       tooltip={t('layoutRecognizeTip')}
     >
-      <Select options={options} popupMatchSelectWidth={false} />
+      <Select
+        options={options}
+        popupMatchSelectWidth={false}
+        onChange={handleLayoutRecognizeChange}
+      />
     </Form.Item>
   );
 };

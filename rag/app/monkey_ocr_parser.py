@@ -40,8 +40,32 @@ class MonkeyOCRParser:
     def _initialize_model(self):
         """Initialize the MonkeyOCR model"""
         try:
-            self.monkey_ocr_model = MonkeyOCR(self.config_path)
+            # Create a temporary config with absolute paths
+            import tempfile
+            import yaml
+            
+            # Read the original config
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+            
+            # Update the models_dir to use absolute path
+            config['models_dir'] = os.path.join(monkeyocr_path, 'model_weight')
+            
+            # Update chat_config weight_path to use absolute path
+            if 'chat_config' in config and 'weight_path' in config['chat_config']:
+                config['chat_config']['weight_path'] = os.path.join(monkeyocr_path, 'model_weight', 'Recognition')
+            
+            # Create a temporary config file with absolute paths
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+                yaml.dump(config, f)
+                temp_config_path = f.name
+            
+            self.monkey_ocr_model = MonkeyOCR(temp_config_path)
             logger.info("MonkeyOCR model initialized successfully")
+            
+            # Clean up temporary file
+            os.unlink(temp_config_path)
+            
         except Exception as e:
             logger.error(f"Failed to initialize MonkeyOCR model: {e}")
             raise

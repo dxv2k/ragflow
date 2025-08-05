@@ -57,8 +57,8 @@ from api.versions import get_ragflow_version
 from api.db.db_models import close_connection
 from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, email, tag
 # Use mock version for testing - uncomment the real version when ready for production
-from rag.app import monkey_ocr_parser_mock as monkey_ocr
-# from rag.app.monkey_ocr_parser import chunk as monkey_ocr  # REAL VERSION
+# from rag.app import monkey_ocr_parser_mock as monkey_ocr
+from rag.app import monkey_ocr_parser as monkey_ocr  # REAL VERSION
 from rag.nlp import search, rag_tokenizer
 from rag.raptor import RecursiveAbstractiveProcessing4TreeOrganizedRetrieval as Raptor
 from rag.settings import DOC_MAXIMUM_SIZE, SVR_CONSUMER_GROUP_NAME, get_svr_queue_name, get_svr_queue_names, print_rag_settings, TAG_FLD, PAGERANK_FLD
@@ -241,7 +241,15 @@ async def build_chunks(task, progress_callback):
         set_progress(task["id"], prog=-1, msg="File size exceeds( <= %dMb )" % (int(DOC_MAXIMUM_SIZE / 1024 / 1024)))
         return []
 
-    chunker = FACTORY[task["parser_id"].lower()]
+    # Check if layout_recognize is specified in parser_config to determine processing engine
+    layout_recognize = task["parser_config"].get("layout_recognize", "DeepDOC")
+    
+    # If MonkeyOCR is selected as layout_recognize, use MonkeyOCR processing
+    if layout_recognize == "MonkeyOCR":
+        chunker = FACTORY["monkeyocr"]
+    else:
+        # Use the parser_id to determine the processing function (default behavior)
+        chunker = FACTORY[task["parser_id"].lower()]
     try:
         st = timer()
         bucket, name = File2DocumentService.get_storage_address(doc_id=task["doc_id"])
@@ -272,6 +280,7 @@ async def build_chunks(task, progress_callback):
                     kb_id=task["kb_id"],
                     parser_config=task["parser_config"],
                     tenant_id=task["tenant_id"],
+                    parser_id=task["parser_id"],
                 )
             )
         logging.info("Chunking({}) {}/{} done".format(timer() - st, task["location"], task["name"]))
