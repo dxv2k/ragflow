@@ -495,8 +495,8 @@ class FileService(CommonService):
         if re.search(r"\.(eml)$", filename):
             return ParserType.EMAIL.value
         # Check if file is supported by MonkeyOCR
-        from api.utils.file_utils import is_monkeyocr_supported
-        if is_monkeyocr_supported(filename):
-            return ParserType.MONKEYOCR.value
+        # from api.utils.file_utils import is_monkeyocr_supported
+        # if is_monkeyocr_supported(filename):
+        #     return ParserType.MONKEYOCR.value
         return default
 

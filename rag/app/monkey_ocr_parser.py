@@ -75,6 +75,9 @@ class MonkeyOCRParser:
                       **kwargs) -> Dict[str, Any]:
         """Parse document using MonkeyOCR"""
         try:
+            # Load model for this task
+            self._load_model()
+            
             if output_dir is None:
                 output_dir = os.path.join(os.path.dirname(file_path), "parsed_output")
             
