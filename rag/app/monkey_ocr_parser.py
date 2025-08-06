@@ -35,40 +35,50 @@ class MonkeyOCRParser:
 
         self.config_path = config_path
         self.monkey_ocr_model = None
-        self._initialize_model()
 
-    def _initialize_model(self):
-        """Initialize the MonkeyOCR model"""
-        try:
-            # Create a temporary config with absolute paths
-            import tempfile
-            import yaml
-            
-            # Read the original config
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            # Update the models_dir to use absolute path
-            config['models_dir'] = os.path.join(monkeyocr_path, 'model_weight')
-            
-            # Update chat_config weight_path to use absolute path
-            if 'chat_config' in config and 'weight_path' in config['chat_config']:
-                config['chat_config']['weight_path'] = os.path.join(monkeyocr_path, 'model_weight', 'Recognition')
-            
-            # Create a temporary config file with absolute paths
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-                yaml.dump(config, f)
-                temp_config_path = f.name
-            
-            self.monkey_ocr_model = MonkeyOCR(temp_config_path)
-            logger.info("MonkeyOCR model initialized successfully")
-            
-            # Clean up temporary file
-            os.unlink(temp_config_path)
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize MonkeyOCR model: {e}")
-            raise
+    def _load_model(self):
+        """Load the MonkeyOCR model on demand"""
+        if self.monkey_ocr_model is None:
+            try:
+                # Create a temporary config with absolute paths
+                import tempfile
+                import yaml
+                
+                # Read the original config
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                
+                # Update the models_dir to use absolute path
+                config['models_dir'] = os.path.join(monkeyocr_path, 'model_weight')
+                
+                # Update chat_config weight_path to use absolute path
+                if 'chat_config' in config and 'weight_path' in config['chat_config']:
+                    config['chat_config']['weight_path'] = os.path.join(monkeyocr_path, 'model_weight', 'Recognition')
+                
+                # Create a temporary config file with absolute paths
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+                    yaml.dump(config, f)
+                    temp_config_path = f.name
+                
+                self.monkey_ocr_model = MonkeyOCR(temp_config_path)
+                logger.info("MonkeyOCR model loaded successfully")
+                
+                # Clean up temporary file
+                os.unlink(temp_config_path)
+                
+            except Exception as e:
+                logger.error(f"Failed to load MonkeyOCR model: {e}")
+                raise
+
+    def _release_model(self):
+        """Release the MonkeyOCR model from memory"""
+        if self.monkey_ocr_model is not None:
+            try:
+                # Clear model reference
+                self.monkey_ocr_model = None
+                logger.info("MonkeyOCR model released from memory")
+            except Exception as e:
+                logger.error(f"Failed to release MonkeyOCR model: {e}")
 
     def parse_document(self, file_path: str, output_dir: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """
@@ -83,6 +93,9 @@ class MonkeyOCRParser:
             Dict with parsing results
         """
         try:
+            # Load model for this task
+            self._load_model()
+            
             if output_dir is None:
                 # Create temporary output directory
                 output_dir = tempfile.mkdtemp(prefix="monkeyocr_")
@@ -99,10 +112,17 @@ class MonkeyOCRParser:
 
             logger.info("MonkeyOCR processing completed successfully")
 
-            return {"success": True, "parsed_dir": output_dir, "enhanced_md_path": enhanced_md_path, "content": content, "content_list": [content] if content else [], "file_path": file_path}
+            result = {"success": True, "parsed_dir": output_dir, "enhanced_md_path": enhanced_md_path, "content": content, "content_list": [content] if content else [], "file_path": file_path}
+            
+            # Release model after task completion
+            self._release_model()
+            
+            return result
 
         except Exception as e:
             logger.error(f"Failed to parse document {file_path}: {e}")
+            # Release model even if task failed
+            self._release_model()
             return {"success": False, "error": str(e), "file_path": file_path}
 
     def _read_enhanced_markdown(self, md_path: str) -> str:
@@ -124,6 +144,9 @@ class MonkeyOCRParser:
         Follows cedd_parse.py parse_only mode
         """
         try:
+            # Load model for this task
+            self._load_model()
+            
             if output_dir is None:
                 output_dir = tempfile.mkdtemp(prefix="monkeyocr_parse_")
 
@@ -136,10 +159,17 @@ class MonkeyOCRParser:
 
             logger.info("Parse only mode completed successfully")
 
-            return {"success": True, "parsed_dir": parsed_dir, "file_path": file_path}
+            result = {"success": True, "parsed_dir": parsed_dir, "file_path": file_path}
+            
+            # Release model after task completion
+            self._release_model()
+            
+            return result
 
         except Exception as e:
             logger.error(f"Parse only mode failed: {e}")
+            # Release model even if task failed
+            self._release_model()
             return {"success": False, "error": str(e), "file_path": file_path}
 
     def ocr_only(self, parsed_folder: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
@@ -148,6 +178,9 @@ class MonkeyOCRParser:
         Follows cedd_parse.py ocr_only mode
         """
         try:
+            # Load model for this task
+            self._load_model()
+            
             if output_dir is None:
                 output_dir = tempfile.mkdtemp(prefix="monkeyocr_ocr_")
 
@@ -163,10 +196,17 @@ class MonkeyOCRParser:
 
             logger.info("OCR only mode completed successfully")
 
-            return {"success": True, "enhanced_md_path": enhanced_md_path, "content": content, "parsed_folder": parsed_folder}
+            result = {"success": True, "enhanced_md_path": enhanced_md_path, "content": content, "parsed_folder": parsed_folder}
+            
+            # Release model after task completion
+            self._release_model()
+            
+            return result
 
         except Exception as e:
             logger.error(f"OCR only mode failed: {e}")
+            # Release model even if task failed
+            self._release_model()
             return {"success": False, "error": str(e), "parsed_folder": parsed_folder}
 
     def get_supported_formats(self) -> List[str]:
