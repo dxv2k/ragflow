@@ -14,6 +14,12 @@ import json
 
 # Add monkeyocr to path for CEDD OCR service
 import sys
+import gc
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 project_root = Path(__file__).parent.parent.parent
 monkeyocr_path = project_root / "monkeyocr"
@@ -75,9 +81,6 @@ class MonkeyOCRParser:
                       **kwargs) -> Dict[str, Any]:
         """Parse document using MonkeyOCR"""
         try:
-            # Load model for this task
-            self._load_model()
-            
             if output_dir is None:
                 output_dir = os.path.join(os.path.dirname(file_path), "parsed_output")
             

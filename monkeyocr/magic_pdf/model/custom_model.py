@@ -1,6 +1,8 @@
 import os
 import time
 import torch
+import gc
+import psutil
 from magic_pdf.config.constants import *
 from magic_pdf.model.sub_modules.model_init import AtomModelSingleton
 from magic_pdf.model.model_list import AtomicModel
@@ -15,9 +17,97 @@ from typing import List, Union
 from openai import OpenAI
 import asyncio
 
+def get_memory_usage():
+    """Get current memory usage for debugging"""
+    try:
+        process = psutil.Process()
+        python_memory = process.memory_info().rss / 1024**3  # GB
+        
+        gpu_memory = "N/A"
+        if torch.cuda.is_available():
+            gpu_memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
+            gpu_memory_reserved = torch.cuda.memory_reserved() / 1024**3  # GB
+            gpu_memory = f"{gpu_memory_allocated:.2f}GB allocated, {gpu_memory_reserved:.2f}GB reserved"
+        
+        return {
+            "python_memory_gb": python_memory,
+            "gpu_memory": gpu_memory,
+            "gpu_available": torch.cuda.is_available()
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# Global cleanup function for LMDeploy tasks
+def force_cleanup_lmdeploy_tasks():
+    """Force cleanup of all LMDeploy tasks"""
+    try:
+        import asyncio
+        import time
+        
+        # Try to get the current event loop
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Cancel all pending tasks that might be LMDeploy related
+                pending_tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
+                for task in pending_tasks:
+                    if 'EngineMainLoop' in str(task) or 'lmdeploy' in str(task).lower():
+                        logger.info(f"Force cancelling LMDeploy task: {task}")
+                        task.cancel()
+                
+                # Give tasks time to cancel
+                time.sleep(0.2)
+        except RuntimeError:
+            # No event loop running
+            pass
+        
+    except Exception as e:
+        logger.warning(f"Error in force cleanup: {e}")
+
+# Register cleanup function to be called at module unload
+import atexit
+atexit.register(force_cleanup_lmdeploy_tasks)
+
+# Add signal handlers for graceful shutdown
+import signal
+import sys
+
+def signal_handler(signum, frame):
+    """Handle termination signals"""
+    logger.info(f"Received signal {signum}, cleaning up LMDeploy tasks...")
+    force_cleanup_lmdeploy_tasks()
+    sys.exit(0)
+
+try:
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+except Exception as e:
+    logger.warning(f"Could not register signal handlers: {e}")
+
+# Context manager for LMDeploy pipeline
+class LMDeployPipelineContext:
+    """Context manager for LMDeploy pipeline to ensure proper cleanup"""
+    
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
+    
+    def __enter__(self):
+        return self.pipeline
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if hasattr(self.pipeline, 'engine') and self.pipeline.engine is not None:
+                force_cleanup_lmdeploy_tasks()
+        except Exception as e:
+            logger.warning(f"Error in pipeline context cleanup: {e}")
+
 
 class MonkeyOCR:
     def __init__(self, config_path):
+        # Log initial memory state
+        initial_memory = get_memory_usage()
+        logger.info(f"MonkeyOCR initialization - Initial memory: {initial_memory}")
+        
         current_file_path = os.path.abspath(__file__)
 
         current_dir = os.path.dirname(current_file_path)
@@ -52,6 +142,10 @@ class MonkeyOCR:
         self.layout_model_name = self.layout_config.get(
             'model', MODEL_NAME.DocLayout_YOLO
         )
+
+        # Log memory before layout model loading
+        pre_layout_memory = get_memory_usage()
+        logger.info(f"Before layout model loading: {pre_layout_memory}")
 
         atom_model_manager = AtomModelSingleton()
         if self.layout_model_name == MODEL_NAME.DocLayout_YOLO:
@@ -156,7 +250,7 @@ class MonkeyChat_LMDeploy:
 
     def _auto_config_dtype(self, engine_config=None, PytorchEngineConfig=None):
         if engine_config is None:
-            engine_config = PytorchEngineConfig(session_len=10240)
+            engine_config = PytorchEngineConfig(session_len=10240, cache_max_entry_count=0.5)
         dtype = "bfloat16"
         if torch.cuda.is_available():
             device = torch.cuda.current_device()
