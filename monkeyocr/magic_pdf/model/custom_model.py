@@ -1,6 +1,8 @@
 import os
 import time
 import torch
+import gc
+import psutil
 from magic_pdf.config.constants import *
 from magic_pdf.model.sub_modules.model_init import AtomModelSingleton
 from magic_pdf.model.model_list import AtomicModel
@@ -15,9 +17,97 @@ from typing import List, Union
 from openai import OpenAI
 import asyncio
 
+def get_memory_usage():
+    """Get current memory usage for debugging"""
+    try:
+        process = psutil.Process()
+        python_memory = process.memory_info().rss / 1024**3  # GB
+        
+        gpu_memory = "N/A"
+        if torch.cuda.is_available():
+            gpu_memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
+            gpu_memory_reserved = torch.cuda.memory_reserved() / 1024**3  # GB
+            gpu_memory = f"{gpu_memory_allocated:.2f}GB allocated, {gpu_memory_reserved:.2f}GB reserved"
+        
+        return {
+            "python_memory_gb": python_memory,
+            "gpu_memory": gpu_memory,
+            "gpu_available": torch.cuda.is_available()
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# Global cleanup function for LMDeploy tasks
+def force_cleanup_lmdeploy_tasks():
+    """Force cleanup of all LMDeploy tasks"""
+    try:
+        import asyncio
+        import time
+        
+        # Try to get the current event loop
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Cancel all pending tasks that might be LMDeploy related
+                pending_tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
+                for task in pending_tasks:
+                    if 'EngineMainLoop' in str(task) or 'lmdeploy' in str(task).lower():
+                        logger.info(f"Force cancelling LMDeploy task: {task}")
+                        task.cancel()
+                
+                # Give tasks time to cancel
+                time.sleep(0.2)
+        except RuntimeError:
+            # No event loop running
+            pass
+        
+    except Exception as e:
+        logger.warning(f"Error in force cleanup: {e}")
+
+# Register cleanup function to be called at module unload
+import atexit
+atexit.register(force_cleanup_lmdeploy_tasks)
+
+# Add signal handlers for graceful shutdown
+import signal
+import sys
+
+def signal_handler(signum, frame):
+    """Handle termination signals"""
+    logger.info(f"Received signal {signum}, cleaning up LMDeploy tasks...")
+    force_cleanup_lmdeploy_tasks()
+    sys.exit(0)
+
+try:
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+except Exception as e:
+    logger.warning(f"Could not register signal handlers: {e}")
+
+# Context manager for LMDeploy pipeline
+class LMDeployPipelineContext:
+    """Context manager for LMDeploy pipeline to ensure proper cleanup"""
+    
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
+    
+    def __enter__(self):
+        return self.pipeline
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if hasattr(self.pipeline, 'engine') and self.pipeline.engine is not None:
+                force_cleanup_lmdeploy_tasks()
+        except Exception as e:
+            logger.warning(f"Error in pipeline context cleanup: {e}")
+
 
 class MonkeyOCR:
     def __init__(self, config_path):
+        # Log initial memory state
+        initial_memory = get_memory_usage()
+        logger.info(f"MonkeyOCR initialization - Initial memory: {initial_memory}")
+        
         current_file_path = os.path.abspath(__file__)
 
         current_dir = os.path.dirname(current_file_path)
@@ -46,6 +136,10 @@ class MonkeyOCR:
         self.layout_config = self.configs.get("layout_config")
         self.layout_model_name = self.layout_config.get("model", MODEL_NAME.DocLayout_YOLO)
 
+        # Log memory before layout model loading
+        pre_layout_memory = get_memory_usage()
+        logger.info(f"Before layout model loading: {pre_layout_memory}")
+
         atom_model_manager = AtomModelSingleton()
         if self.layout_model_name == MODEL_NAME.DocLayout_YOLO:
             layout_model_path = os.path.join(models_dir, self.configs["weights"][self.layout_model_name])
@@ -69,6 +163,10 @@ class MonkeyOCR:
             )
         logger.info(f"layout model loaded: {self.layout_model_name}")
 
+        # Log memory after layout model loading
+        post_layout_memory = get_memory_usage()
+        logger.info(f"After layout model loading: {post_layout_memory}")
+
         layout_reader_config = self.layout_config.get("reader")
         self.layout_reader_name = layout_reader_config.get("name")
         if self.layout_reader_name == "layoutreader":
@@ -87,6 +185,10 @@ class MonkeyOCR:
             logger.error("model name not allow")
         self.layoutreader_model = model
         logger.info(f"layoutreader model loaded: {self.layout_reader_name}")
+
+        # Log memory after layoutreader model loading
+        post_reader_memory = get_memory_usage()
+        logger.info(f"After layoutreader model loading: {post_reader_memory}")
 
         self.chat_config = self.configs.get("chat_config", {})
         chat_backend = self.chat_config.get("backend", "lmdeploy")
@@ -120,6 +222,78 @@ class MonkeyOCR:
             self.chat_model = MonkeyChat_LMDeploy(chat_path)
         logger.info(f"VLM loaded: {self.chat_model.model_name}")
 
+        # Log final memory state
+        final_memory = get_memory_usage()
+        logger.info(f"MonkeyOCR initialization complete - Final memory: {final_memory}")
+
+    def cleanup(self):
+        """Clean up resources and shutdown background tasks"""
+        try:
+            logger.info("Starting MonkeyOCR model cleanup...")
+            
+            # Log memory before cleanup
+            pre_cleanup_memory = get_memory_usage()
+            logger.info(f"Before cleanup: {pre_cleanup_memory}")
+            
+            # Clean up chat model if it has a shutdown method
+            if hasattr(self, 'chat_model') and self.chat_model is not None:
+                if hasattr(self.chat_model, 'shutdown'):
+                    logger.info("Shutting down chat model...")
+                    self.chat_model.shutdown()
+                elif hasattr(self.chat_model, 'cleanup'):
+                    logger.info("Cleaning up chat model...")
+                    self.chat_model.cleanup()
+                del self.chat_model
+            
+            # Clean up layout model if it exists
+            if hasattr(self, 'layout_model') and self.layout_model is not None:
+                del self.layout_model
+            
+            # Clean up layoutreader model if it exists
+            if hasattr(self, 'layoutreader_model') and self.layoutreader_model is not None:
+                del self.layoutreader_model
+            
+            # Clean up singleton cached models
+            try:
+                atom_model_manager = AtomModelSingleton()
+                cached_count = atom_model_manager.get_cached_model_count()
+                if cached_count > 0:
+                    logger.info(f"Cleaning up {cached_count} cached models in singleton...")
+                    atom_model_manager.cleanup_models()
+                else:
+                    logger.info("No cached models to clean up in singleton")
+            except Exception as e:
+                logger.warning(f"Error cleaning up singleton models: {e}")
+            
+            # Clear GPU cache
+            try:
+                if torch and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+            except Exception as e:
+                logger.warning(f"Failed to clear GPU cache: {e}")
+            
+            # Force garbage collection
+            gc.collect()
+            
+            # Log memory after cleanup
+            post_cleanup_memory = get_memory_usage()
+            logger.info(f"After cleanup: {post_cleanup_memory}")
+            
+            logger.info("MonkeyOCR model cleanup completed")
+            
+        except Exception as e:
+            logger.error(f"Error during MonkeyOCR cleanup: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        try:
+            self.cleanup()
+        except Exception:
+            pass
+        # Final cleanup attempt
+        force_cleanup_lmdeploy_tasks()
+
 
 class MonkeyChat_LMDeploy:
     def __init__(self, model_path, engine_config=None):
@@ -135,7 +309,7 @@ class MonkeyChat_LMDeploy:
 
     def _auto_config_dtype(self, engine_config=None, PytorchEngineConfig=None):
         if engine_config is None:
-            engine_config = PytorchEngineConfig(session_len=10240)
+            engine_config = PytorchEngineConfig(session_len=10240, cache_max_entry_count=0.5)
         dtype = "bfloat16"
         if torch.cuda.is_available():
             device = torch.cuda.current_device()
@@ -185,6 +359,106 @@ class MonkeyChat_LMDeploy:
         logger.info(f"Qwen2.5VL LMDeploy - Total Batch Time: {round(input_prep_time + model_inference_time, 3)}s for {len(images)} images")
 
         return [output.text for output in outputs]
+
+    def cleanup(self):
+        """Clean up LMDeploy pipeline resources"""
+        try:
+            logger.info("Cleaning up LMDeploy pipeline...")
+            
+            # Properly shut down LMDeploy pipeline
+            if hasattr(self, 'pipe') and self.pipe is not None:
+                try:
+                    # Try to access the engine and shut it down properly
+                    if hasattr(self.pipe, 'engine') and self.pipe.engine is not None:
+                        logger.info("Shutting down LMDeploy engine...")
+                        engine = self.pipe.engine
+                        
+                        # Cancel any pending tasks
+                        if hasattr(engine, '_loop_tasks'):
+                            for task in engine._loop_tasks:
+                                if not task.done():
+                                    task.cancel()
+                        
+                        # Try to access and cancel EngineMainLoop tasks
+                        if hasattr(engine, '_engine_loop_task') and engine._engine_loop_task is not None:
+                            if not engine._engine_loop_task.done():
+                                engine._engine_loop_task.cancel()
+                        
+                        # Close the engine if it has a close method
+                        if hasattr(engine, 'close'):
+                            try:
+                                engine.close()
+                            except Exception as e:
+                                logger.warning(f"Error closing engine: {e}")
+                        
+                        # Try to stop the engine loop
+                        if hasattr(engine, 'stop'):
+                            try:
+                                engine.stop()
+                            except Exception as e:
+                                logger.warning(f"Error stopping engine: {e}")
+                        
+                        # Wait longer for tasks to be cancelled
+                        import time
+                        import asyncio
+                        
+                        # Try to cancel any remaining tasks in the event loop
+                        try:
+                            loop = asyncio.get_event_loop()
+                            if loop.is_running():
+                                pending_tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
+                                for task in pending_tasks:
+                                    if 'EngineMainLoop' in str(task) or 'lmdeploy' in str(task).lower():
+                                        logger.info(f"Cancelling pending task: {task}")
+                                        task.cancel()
+                                
+                                # Wait longer for cancellation to take effect
+                                time.sleep(0.5)
+                        except RuntimeError:
+                            # No event loop running
+                            time.sleep(0.5)
+                        
+                        # Call global cleanup function
+                        force_cleanup_lmdeploy_tasks()
+                    
+                    # Clear pipeline reference
+                    del self.pipe
+                    self.pipe = None
+                    
+                except Exception as e:
+                    logger.warning(f"Error during LMDeploy engine shutdown: {e}")
+                    # Fallback: just delete the pipeline
+                    del self.pipe
+                    self.pipe = None
+            
+            # Clear GPU cache
+            try:
+                if torch and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+            except Exception as e:
+                logger.warning(f"Failed to clear GPU cache: {e}")
+            
+            logger.info("LMDeploy pipeline cleanup completed")
+            
+            # Final cleanup: try to force garbage collection
+            import gc
+            gc.collect()
+            
+            # Final attempt to clean up any remaining tasks
+            force_cleanup_lmdeploy_tasks()
+            
+        except Exception as e:
+            logger.error(f"Error during LMDeploy cleanup: {e}")
+            # Even if cleanup failed, try to clean up tasks
+            force_cleanup_lmdeploy_tasks()
+
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        try:
+            self.cleanup()
+        except Exception:
+            pass
 
 
 class MonkeyChat_vLLM:
@@ -253,6 +527,36 @@ class MonkeyChat_vLLM:
         logger.info(f"Qwen2.5VL vLLM - Total Batch Time: {round(input_prep_time + model_inference_time, 3)}s for {len(images)} images")
 
         return [o.outputs[0].text for o in outputs]
+
+    def cleanup(self):
+        """Clean up vLLM resources"""
+        try:
+            logger.info("Cleaning up vLLM pipeline...")
+            
+            # Clear pipeline reference
+            if hasattr(self, 'pipe') and self.pipe is not None:
+                del self.pipe
+                self.pipe = None
+            
+            # Clear GPU cache
+            try:
+                if torch and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+            except Exception as e:
+                logger.warning(f"Failed to clear GPU cache: {e}")
+            
+            logger.info("vLLM pipeline cleanup completed")
+            
+        except Exception as e:
+            logger.error(f"Error during vLLM cleanup: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        try:
+            self.cleanup()
+        except Exception:
+            pass
 
 
 class MonkeyChat_transformers:
@@ -488,6 +792,41 @@ class MonkeyChat_transformers:
     def single_inference(self, image: Union[str, Image.Image], question: str) -> str:
         return self._process_single(image, question)
 
+    def cleanup(self):
+        """Clean up transformers resources"""
+        try:
+            logger.info("Cleaning up transformers model...")
+            
+            # Clear model reference
+            if hasattr(self, 'model') and self.model is not None:
+                del self.model
+                self.model = None
+            
+            # Clear processor reference
+            if hasattr(self, 'processor') and self.processor is not None:
+                del self.processor
+                self.processor = None
+            
+            # Clear GPU cache
+            try:
+                if torch and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+            except Exception as e:
+                logger.warning(f"Failed to clear GPU cache: {e}")
+            
+            logger.info("Transformers model cleanup completed")
+            
+        except Exception as e:
+            logger.error(f"Error during transformers cleanup: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        try:
+            self.cleanup()
+        except Exception:
+            pass
+
 
 class MonkeyChat_OpenAIAPI:
     def __init__(self, url: str, model_name: str, api_key: str = None):
@@ -537,6 +876,36 @@ class MonkeyChat_OpenAIAPI:
             except Exception as e:
                 results.append(f"Error: {e}")
         return results
+
+    def cleanup(self):
+        """Clean up OpenAI API resources"""
+        try:
+            logger.info("Cleaning up OpenAI API client...")
+            
+            # Clear client reference
+            if hasattr(self, 'client') and self.client is not None:
+                del self.client
+                self.client = None
+            
+            # Clear GPU cache
+            try:
+                if torch and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+            except Exception as e:
+                logger.warning(f"Failed to clear GPU cache: {e}")
+            
+            logger.info("OpenAI API client cleanup completed")
+            
+        except Exception as e:
+            logger.error(f"Error during OpenAI API cleanup: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        try:
+            self.cleanup()
+        except Exception:
+            pass
 
 
 class MonkeyChat_LMDeploy_queue:

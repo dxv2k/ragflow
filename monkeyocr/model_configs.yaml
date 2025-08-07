@@ -3,15 +3,15 @@ weights:
   doclayout_yolo: Structure/doclayout_yolo_docstructbench_imgsz1280_2501.pt # or Structure/layout_zh.pt
   # PP-DocLayout_plus-L: Structure/PP-DocLayout_plus-L
   layoutreader: Relation
-models_dir: model_weight
+models_dir: monkeyocr/model_weight
 layout_config:
   model: doclayout_yolo # PP-DocLayout_plus-L (used by MonkeyOCR-pro) / doclayout_yolo
   reader:
     name: layoutreader
 chat_config:
-  weight_path: model_weight/Recognition
-  backend: vllm # lmdeploy / vllm / transformers / api / lmdeploy_queue / vllm_queue
-  batch_size: 2 # active when using `transformers` as backend
+  weight_path: monkeyocr/model_weight/Recognition
+  backend: lmdeploy # lmdeploy / vllm / transformers / api / lmdeploy_queue / vllm_queue
+  batch_size: 2 # active when using `transformerçs` as backend
   # if using xxx_queue as backend
   queue_config:
     max_batch_size: 256 # maximum batch size for internal processing

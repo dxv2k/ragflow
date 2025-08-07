@@ -42,6 +42,51 @@ class AtomModelSingleton:
             self._models[key] = atom_model_init(model_name=atom_model_name, **kwargs)
         return self._models[key]
 
+    def cleanup_models(self):
+        """Clean up all cached models to free GPU memory"""
+        try:
+            logger.info(f"Cleaning up {len(self._models)} cached models...")
+            
+            # Clear all cached models
+            for key, model in self._models.items():
+                try:
+                    # Try to clean up model if it has a cleanup method
+                    if hasattr(model, 'cleanup'):
+                        model.cleanup()
+                    elif hasattr(model, 'close'):
+                        model.close()
+                    
+                    # Delete model reference
+                    del model
+                    logger.info(f"Cleaned up model: {key}")
+                except Exception as e:
+                    logger.warning(f"Error cleaning up model {key}: {e}")
+            
+            # Clear the models dictionary
+            self._models.clear()
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
+            # Clear GPU cache if available
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            
+            logger.info("All cached models cleaned up successfully")
+            
+        except Exception as e:
+            logger.error(f"Error during model cleanup: {e}")
+
+    def get_cached_model_count(self):
+        """Get the number of cached models"""
+        return len(self._models)
+
+    def get_cached_model_keys(self):
+        """Get the keys of cached models"""
+        return list(self._models.keys())
+
 
 def atom_model_init(model_name: str, **kwargs):
     atom_model = None
