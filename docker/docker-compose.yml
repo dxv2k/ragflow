@@ -1,3 +1,4 @@
+
 include:
   - ./docker-compose-base.yml
 
@@ -7,22 +8,20 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      # minio:
-      #   condition: service_healthy
     image: ${RAGFLOW_IMAGE}
     # Example configuration to set up an MCP server:
-    command:
-      - --enable-mcpserver
-      - --mcp-host=0.0.0.0
-      - --mcp-port=9382
-      - --mcp-base-url=http://127.0.0.1:9380
-      - --mcp-script-path=/ragflow/mcp/server/server.py
-      - --mcp-mode=self-host
-      - --mcp-host-api-key=ragflow-ljMjA5MDUwM2QzMzExZjA4MmNmMDI0Mm
+    # command:
+    #   - --enable-mcpserver
+    #   - --mcp-host=0.0.0.0
+    #   - --mcp-port=9382
+    #   - --mcp-base-url=http://127.0.0.1:9380
+    #   - --mcp-script-path=/ragflow/mcp/server/server.py
+    #   - --mcp-mode=self-host
+    #   - --mcp-host-api-key=ragflow-xxxxxxx
     container_name: ragflow-server
     ports:
       - ${SVR_HTTP_PORT}:9380
-      - 81:81
+      - 80:80
       - 443:443
       - 5678:5678
       - 5679:5679
