@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.10
 import os
+import json
 import sys
 import time
 import argparse
@@ -218,6 +219,11 @@ def parse_file(input_file, output_dir, MonkeyOCR_model, split_pages=False, pred_
             page_pipe_result.dump_middle_json(page_md_writer, f'{name_without_suff}_page_{page_idx}_middle.json')
         
         logger.info(f"All {len(infer_result)} pages processed and saved in separate subdirectories")
+        # Emit normalized layout.json (sections-only; Option A)
+        try:
+            _emit_sections_only_layout_json(local_md_dir, name_without_suff)
+        except Exception as e:
+            logger.warning(f"Failed to emit sections-only layout.json: {e}")
     else:
         logger.info("Processing as single result...")
         pipe_result = infer_result.pipe_ocr_mode(image_writer, MonkeyOCR_model=MonkeyOCR_model)
@@ -227,6 +233,12 @@ def parse_file(input_file, output_dir, MonkeyOCR_model, split_pages=False, pred_
         pipe_result.dump_md(md_writer, f"{name_without_suff}.md", image_dir)
         pipe_result.dump_content_list(md_writer, f"{name_without_suff}_content_list.json", image_dir)
         pipe_result.dump_middle_json(md_writer, f'{name_without_suff}_middle.json')
+
+        # Emit normalized layout.json (sections-only; Option A)
+        try:
+            _emit_sections_only_layout_json(local_md_dir, name_without_suff)
+        except Exception as e:
+            logger.warning(f"Failed to emit sections-only layout.json: {e}")
 
     parsing_time = time.time() - start_time
     logger.info(f"Parsing and saving time: {parsing_time:.2f}s")
@@ -733,6 +745,59 @@ def cedd_parse(
         logger.error(f"[FATAL ERROR] {e}", exc_info=True) # Log with traceback
         sys.exit(1)
 
+
+def _emit_sections_only_layout_json(local_md_dir: Path, stem: str) -> None:
+    """Emit a DeepDoc-compatible layout JSON with sections-only (Option A).
+
+    - sections: built from any *content_list.json files found under local_md_dir
+      as (text, "@@{page_idx+1}\t0\t0\t0\t0##").
+    - tables: []
+    - figures: null
+
+    The output is saved to {stem}_layout.json in the local_md_dir.
+    """
+    layout_path = local_md_dir / f"{stem}_layout.json"
+    sections = []
+    tables = []
+    figures = None
+
+    # Gather all content_list.json files (root + per-page)
+    content_lists = list(local_md_dir.rglob("*_content_list.json"))
+    if not content_lists:
+        logger.info("No content_list.json found. Skipping layout.json emission.")
+        return
+
+    for cl_path in sorted(content_lists):
+        try:
+            with open(cl_path, "r", encoding="utf-8") as f:
+                items = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to read content list {cl_path}: {e}")
+            continue
+
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+            if item_type == "text":
+                text = item.get("text", "")
+                try:
+                    pn = int(item.get("page_idx", 0)) + 1
+                except Exception:
+                    pn = 1
+                tag = f"@@{pn}\t0\t0\t0\t0##"
+                if text and text.strip():
+                    sections.append([text, tag])
+
+    payload = {
+        "sections": sections,
+        "tables": tables,
+        "figures": figures,
+    }
+
+    with open(layout_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    logger.info(f"Emitted sections-only layout JSON: {layout_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CEDD PDF Parsing CLI Tool (two-phase, memory-safe)")

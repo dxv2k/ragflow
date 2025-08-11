@@ -49,7 +49,7 @@ docker/data
 output/
 build/
 model_weight
-output_*
+output*
 output_cedd/
 =*
 *.egg-info

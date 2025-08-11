@@ -32,6 +32,7 @@ from deepdoc.parser import DocxParser, ExcelParser, HtmlParser, JsonParser, Mark
 from deepdoc.parser.figure_parser import VisionFigureParser, vision_figure_parser_figure_data_wraper
 from deepdoc.parser.pdf_parser import PlainParser, VisionParser
 from rag.nlp import concat_img, find_codec, naive_merge, naive_merge_with_images, naive_merge_docx, rag_tokenizer, tokenize_chunks, tokenize_chunks_with_images, tokenize_table
+from .monkey_ocr import parse_layout as monkeyocr_parse_layout
 from rag.utils import num_tokens_from_string
 
 
@@ -436,6 +437,21 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
                     tables.extend(figures)
             else:
                 sections, tables = pdf_parser(filename if not binary else binary, from_page=from_page, to_page=to_page, callback=callback)
+
+            res = tokenize_table(tables, doc, is_english)
+            callback(0.8, "Finish parsing.")
+
+        elif layout_recognizer == "MonkeyOCR":
+            # Use MonkeyOCR layout adapter directly
+            sections, tables, figures = monkeyocr_parse_layout(
+                filename=filename,
+                binary=binary,
+                from_page=from_page,
+                to_page=to_page,
+                callback=callback,
+                parser_config=parser_config,
+                separate_tables_figures=False,
+            )
 
             res = tokenize_table(tables, doc, is_english)
             callback(0.8, "Finish parsing.")
