@@ -46,3 +46,4 @@ nltk_data/
 docker/data
 ragflow.egg*
 .cursor/
+zDocs/
