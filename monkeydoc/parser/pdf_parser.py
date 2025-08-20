@@ -329,6 +329,14 @@ class MonkeyDocPdfParser:
         # Phase 6: build sections with inline position tags from all text boxes
         try:
             sections: List[Tuple[str, str]] = self._build_sections_from_boxes(zoomin=zoomin, mdl=mdl)
+            # Optional post-pass: horizontal merge + dedup to reduce duplicates.
+            # Can be disabled for tuning via environment variable.
+            try:
+                if not os.getenv("MONKEYDOC_DISABLE_POSTPASS"):
+                    from monkeydoc.utils import merge_and_dedup  # lightweight helper
+                    sections = merge_and_dedup(sections, y_tol=2.0, min_horiz_overlap=0.1, cover_ratio=0.8)
+            except Exception:
+                pass
         except Exception:
             logger.exception("MonkeyDocPdfParser build sections")
             sections = []
