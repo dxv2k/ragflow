@@ -319,6 +319,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                 omr_enabled = bool(omr_cfg.get("enabled", True))
                 omr_min_area = float(omr_cfg.get("min_area", 500.0))
                 omr_max_aspect = float(omr_cfg.get("max_aspect", 10.0))
+                chunk_token_num = int(parser_config.get("chunk_token_num", 256))
                 sections, tbls = pdf_parser(
                     temp_path,
                     need_image=need_image,
@@ -327,6 +328,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                     omr_enabled=omr_enabled,
                     omr_min_area=omr_min_area,
                     omr_max_aspect=omr_max_aspect,
+                    chunk_token_num=chunk_token_num,
                 )
 
                 safe_callback(0.7, "MonkeyOCR: building chunks...")

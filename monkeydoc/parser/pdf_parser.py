@@ -97,7 +97,7 @@ class MonkeyDocPdfParser:
 
     # API-compatible __call__
     def __call__(self, fnm: str | bytes, need_image: bool = True, zoomin: int = 3, return_html: bool = False,
-                 omr_enabled: bool = True, omr_min_area: float = 500.0, omr_max_aspect: float = 10.0) -> Tuple[List[Tuple[str, str]], List[Any]]:
+                 omr_enabled: bool = True, omr_min_area: float = 500.0, omr_max_aspect: float = 10.0, chunk_token_num: int = 512) -> Tuple[List[Tuple[str, str]], List[Any]]:
         """Parse a PDF and return DeepDoc-compatible outputs.
 
         Returns
@@ -330,13 +330,10 @@ class MonkeyDocPdfParser:
         try:
             sections: List[Tuple[str, str]] = self._build_sections_from_boxes(zoomin=zoomin, mdl=mdl)
             # Optional post-pass: horizontal merge + dedup to reduce duplicates.
-            # Can be disabled for tuning via environment variable.
-            try:
-                if not os.getenv("MONKEYDOC_DISABLE_POSTPASS"):
-                    from monkeydoc.utils import merge_and_dedup  # lightweight helper
-                    sections = merge_and_dedup(sections, y_tol=2.0, min_horiz_overlap=0.1, cover_ratio=0.8)
-            except Exception:
-                pass
+
+            from monkeydoc.utils import merge_and_dedup, pack_by_token_limit  # lightweight helper
+            sections = merge_and_dedup(sections, y_tol=2.0, min_horiz_overlap=0.1, cover_ratio=0.8)
+            sections = pack_by_token_limit(sections, chunk_token_num=chunk_token_num)
         except Exception:
             logger.exception("MonkeyDocPdfParser build sections")
             sections = []
@@ -390,27 +387,82 @@ class MonkeyDocPdfParser:
         if not tags:
             return (None, None) if need_position else None
 
-        # Use first tag (common for a single line)
-        pages_str, left, right, top, bottom = tags[0]
-        try:
-            pn = int(str(pages_str).split("-")[0]) - 1
-            left = float(left)
-            right = float(right)
-            top = float(top)
-            bottom = float(bottom)
-        except Exception:
+        # Parse all tags and group by page
+        parsed_rects = []  # list of (pn_idx, left, right, top, bottom)
+        for pages_str, left, right, top, bottom in tags:
+            try:
+                pn_idx = int(str(pages_str).split("-")[0]) - 1
+                parsed_rects.append(
+                    (pn_idx, float(left), float(right), float(top), float(bottom))
+                )
+            except Exception:
+                continue
+
+        if not parsed_rects:
             return (None, None) if need_position else None
 
+        # Convert to per-page bounding rect using first chunk TL and final chunk BR in reading order
         zm = max(ZM, 1)
-        l = int(left * zm)
-        r = int(right * zm)
-        t = int(top * zm)
-        b = int(bottom * zm)
-        if pn < 0 or pn >= len(self.page_images) or r <= l or b <= t:
+        # Sort by reading order (page asc, top asc, left asc)
+        parsed_rects.sort(key=lambda x: (x[0], x[3], x[1]))
+        per_page_ordered = {}
+        for pn_idx, left, right, top, bottom in parsed_rects:
+            if pn_idx < 0 or pn_idx >= len(self.page_images):
+                continue
+            if pn_idx not in per_page_ordered:
+                per_page_ordered[pn_idx] = []
+            per_page_ordered[pn_idx].append((left, right, top, bottom))
+        per_page = {}
+        for pn_idx, rects in per_page_ordered.items():
+            # Robust union: min left/top, max right/bottom across all rects in this page
+            min_left = min(r[0] for r in rects)
+            max_right = max(r[1] for r in rects)
+            min_top = min(r[2] for r in rects)
+            max_bottom = max(r[3] for r in rects)
+            l = int(min_left * zm)
+            t = int(min_top * zm)
+            r = int(max_right * zm)
+            b = int(max_bottom * zm)
+            if r > l and b > t:
+                per_page[pn_idx] = [l, t, r, b]
+
+        if not per_page:
             return (None, None) if need_position else None
 
-        img = self.page_images[pn].crop((l, t, r, b))
-        positions = [(pn, left, right, top, bottom)]
+        # Crop images per page and compose horizontally (left-to-right by page)
+        crops = []
+        for pn_idx in sorted(per_page.keys()):
+            l, t, r, b = per_page[pn_idx]
+            try:
+                crops.append(self.page_images[pn_idx].crop((l, t, r, b)))
+            except Exception:
+                continue
+
+        if not crops:
+            return (None, None) if need_position else None
+
+        if len(crops) == 1:
+            img = crops[0]
+        else:
+            # Compose horizontally with white background, height = max height
+            widths = [im.width for im in crops]
+            heights = [im.height for im in crops]
+            total_w = sum(widths)
+            max_h = max(heights)
+            try:
+                from PIL import Image as PILImage
+                canvas = PILImage.new("RGB", (total_w, max_h), color=(255, 255, 255))
+                x = 0
+                for im in crops:
+                    y = (max_h - im.height) // 2
+                    canvas.paste(im, (x, y))
+                    x += im.width
+                img = canvas
+            except Exception:
+                img = crops[0]
+
+        # Positions reflect the chosen per-page bounding rects (first TL to last BR)
+        positions = [(pn_idx, l / zm, r / zm, t / zm, b / zm) for pn_idx, (l, t, r, b) in sorted(per_page.items())]
         if need_position:
             return img, positions
         return img

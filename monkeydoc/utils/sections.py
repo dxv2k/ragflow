@@ -182,3 +182,73 @@ def merge_and_dedup(sections: List[Tuple[str, str]], y_tol: float = 2.0, min_hor
     return deduplicate_overlaps(merged, cover_ratio=cover_ratio)
 
 
+def pack_by_token_limit(
+    sections: List[Tuple[str, str]],
+    chunk_token_num: int,
+    token_counter: "callable[[str], int] | None" = None,
+    separator: str = "\n",
+) -> List[Tuple[str, str]]:
+    """Pack adjacent small sections into larger chunks under a token threshold.
+
+    Behavior:
+    - Iterate sections in order. If a section's token length >= chunk_token_num, flush any
+      pending buffer first, then append this section as-is.
+    - Otherwise, try to accumulate consecutive small sections until adding the next would
+      exceed chunk_token_num; emit the accumulated buffer, then continue.
+
+    Token counting removes inline position tags before counting.
+    """
+
+    # Choose token counter
+    if token_counter is None:
+        try:
+            from rag.utils import num_tokens_from_string as _ntfs  # type: ignore
+
+            def token_counter(txt: str) -> int:  # type: ignore[no-redef]
+                return int(_ntfs(txt))
+        except Exception:
+            def token_counter(txt: str) -> int:  # type: ignore[no-redef]
+                return max(1, len(txt.split()))
+
+    def strip_tag(s_with_tag: str) -> str:
+        m = _TAG_RE.search(s_with_tag)
+        return _TAG_RE.sub("", s_with_tag).strip() if m else s_with_tag
+
+    packed: List[Tuple[str, str]] = []
+    buf_texts: List[str] = []
+    buf_tokens = 0
+
+    def flush_buffer():
+        nonlocal buf_texts, buf_tokens
+        if buf_texts:
+            combined = separator.join(buf_texts)
+            packed.append((combined, ""))
+            buf_texts = []
+            buf_tokens = 0
+
+    for t, meta in sections:
+        body = strip_tag(t)
+        tok = token_counter(body)
+        if tok >= chunk_token_num:
+            # Large chunk stands alone
+            flush_buffer()
+            packed.append((t, meta))
+            continue
+
+        # Try to fit into buffer
+        if buf_tokens == 0:
+            buf_texts.append(t)
+            buf_tokens = tok
+        else:
+            if buf_tokens + tok <= chunk_token_num:
+                buf_texts.append(t)
+                buf_tokens += tok
+            else:
+                # Emit current buffer, start a new one with current
+                flush_buffer()
+                buf_texts.append(t)
+                buf_tokens = tok
+
+    flush_buffer()
+    return packed
+

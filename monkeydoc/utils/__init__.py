@@ -8,12 +8,14 @@ from .sections import (
     merge_horizontally,
     deduplicate_overlaps,
     merge_and_dedup,
+    pack_by_token_limit,
 )
 
 __all__ = [
     "merge_horizontally",
     "deduplicate_overlaps",
     "merge_and_dedup",
+    "pack_by_token_limit",
 ]
 
 
