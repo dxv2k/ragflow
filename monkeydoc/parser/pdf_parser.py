@@ -65,7 +65,7 @@ class MonkeyDocPdfParser:
         if tag:
             logger.info("[MonkeyDoc] memory cleanup done (%s)", tag)
 
-    def _render_pages(self, fnm: str | bytes, zoomin: int = 3) -> None:
+    def _render_pages(self, fnm: str | bytes, zoomin: int = 3, from_page: int = 0, to_page: int = 100000) -> None:
         """Render PDF pages and cache text-layer words.
 
         Parameters
@@ -80,7 +80,7 @@ class MonkeyDocPdfParser:
         self.page_words: List[List[dict]] = []
         try:
             with (pdfplumber.open(fnm) if isinstance(fnm, str) else pdfplumber.open(BytesIO(fnm))) as pdf:
-                for page in pdf.pages:
+                for page in pdf.pages[from_page:to_page]:
                     # Use annotated to get a PIL image
                     img = page.to_image(resolution=72 * zoomin, antialias=True).annotated
                     self.page_images.append(img)
@@ -97,7 +97,7 @@ class MonkeyDocPdfParser:
 
     # API-compatible __call__
     def __call__(self, fnm: str | bytes, need_image: bool = True, zoomin: int = 3, return_html: bool = False,
-                 omr_enabled: bool = True, omr_min_area: float = 500.0, omr_max_aspect: float = 10.0, chunk_token_num: int = 512) -> Tuple[List[Tuple[str, str]], List[Any]]:
+                 omr_enabled: bool = True, omr_min_area: float = 500.0, omr_max_aspect: float = 10.0, from_page: int = 0, to_page: int = 100000) -> Tuple[List[Tuple[str, str]], List[Any]]:
         """Parse a PDF and return DeepDoc-compatible outputs.
 
         Returns
@@ -110,7 +110,7 @@ class MonkeyDocPdfParser:
 
         t0 = time.time()
         logger.info("[MonkeyDoc] Rendering pages start")
-        self._render_pages(fnm, zoomin=zoomin)
+        self._render_pages(fnm, zoomin=zoomin, from_page=from_page, to_page=to_page)
         logger.info("[MonkeyDoc] Rendering pages done: %d pages in %.1f ms", len(self.page_images), (time.time()-t0)*1000)
 
         # Phase 2: populate per-page layout blocks (internal) for future steps
@@ -331,9 +331,9 @@ class MonkeyDocPdfParser:
             sections: List[Tuple[str, str]] = self._build_sections_from_boxes(zoomin=zoomin, mdl=mdl)
             # Optional post-pass: horizontal merge + dedup to reduce duplicates.
 
-            from monkeydoc.utils import merge_and_dedup, pack_by_token_limit  # lightweight helper
+            from monkeydoc.utils import merge_and_dedup  # lightweight helper
             sections = merge_and_dedup(sections, y_tol=2.0, min_horiz_overlap=0.1, cover_ratio=0.8)
-            sections = pack_by_token_limit(sections, chunk_token_num=chunk_token_num)
+
         except Exception:
             logger.exception("MonkeyDocPdfParser build sections")
             sections = []

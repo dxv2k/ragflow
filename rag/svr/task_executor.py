@@ -235,15 +235,7 @@ async def build_chunks(task, progress_callback):
                                               (int(DOC_MAXIMUM_SIZE / 1024 / 1024)))
         return []
 
-    # Check if layout_recognize is specified in parser_config to determine processing engine
-    layout_recognize = task["parser_config"].get("layout_recognize", "DeepDOC")
-    
-    # If MonkeyOCR is selected as layout_recognize, use MonkeyOCR processing
-    if layout_recognize == "MonkeyOCR":
-        chunker = FACTORY["monkeyocr"]
-    else:
-        # Use the parser_id to determine the processing function (default behavior)
-        chunker = FACTORY[task["parser_id"].lower()]
+    chunker = FACTORY[task["parser_id"].lower()]
     try:
         st = timer()
         bucket, name = File2DocumentService.get_storage_address(doc_id=task["doc_id"])

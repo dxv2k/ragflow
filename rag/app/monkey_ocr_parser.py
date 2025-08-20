@@ -48,144 +48,6 @@ class MonkeyOCRParser:
 
         self.config_path = config_path
 
-    def parse_document(self, file_path: str, output_dir: Optional[str] = None, **kwargs) -> Dict[str, Any]:
-        """
-        Parse document using MonkeyOCR with single-use approach: Load model → Process → Shutdown completely
-        
-        This method:
-        1. Loads the MonkeyOCR model once
-        2. Processes the document with cedd_parse
-        3. Completely shuts down and frees all GPU memory
-        4. Returns the results
-
-        Args:
-            file_path: Input file path
-            output_dir: Output directory (optional)
-            **kwargs: Additional arguments
-
-        Returns:
-            Dict with parsing results
-        """
-        logger.info(f"📄 parse_document started for file: {file_path}")
-        logger.info(f"📁 Output directory: {output_dir}")
-        logger.info(f"⚙️ Additional kwargs: {kwargs}")
-        
-        # Import memory tracking function
-        from monkeyocr.magic_pdf.model.custom_model import get_memory_usage
-        from monkeyocr.magic_pdf.model.sub_modules.model_init import AtomModelSingleton
-        
-        # Log initial memory state
-        initial_memory = get_memory_usage()
-        logger.info(f"Initial memory state: {initial_memory}")
-        
-        model = None
-        try:
-            if output_dir is None:
-                # Create temporary output directory
-                logger.info("📁 Creating temporary output directory...")
-                output_dir = tempfile.mkdtemp(prefix="monkeyocr_")
-                logger.info(f"✅ Temporary output directory created: {output_dir}")
-
-            logger.info("Starting MonkeyOCR parsing with single-use approach")
-            logger.info(f"Input file: {file_path}")
-            logger.info(f"Output directory: {output_dir}")
-
-            # Step 1: Load MonkeyOCR model
-            logger.info("🚀 Step 1: Loading MonkeyOCR model...")
-            start_time = time.time()
-            
-            model = MonkeyOCR(self.config_path)
-            
-            load_time = time.time() - start_time
-            logger.info(f"Model loaded successfully in {load_time:.2f} seconds")
-            
-            # Log memory after model loading
-            post_load_memory = get_memory_usage()
-            logger.info(f"Memory after model load: {post_load_memory}")
-
-            # Step 2: Process document with cedd_parse
-            logger.info("🚀 Step 2: Processing document with cedd_parse...")
-            start_time = time.time()
-            
-            enhanced_md_path = cedd_parse(
-                input_pdf=file_path, 
-                output_dir=output_dir, 
-                config_path=self.config_path, 
-                MonkeyOCR_model=model,  # Pass the loaded model
-                mode="full"
-            )
-            
-            process_time = time.time() - start_time
-            logger.info(f"Document processed successfully in {process_time:.2f} seconds")
-            logger.info(f"✅ cedd_parse completed, enhanced_md_path: {enhanced_md_path}")
-
-            # Log memory after processing
-            post_process_memory = get_memory_usage()
-            logger.info(f"Memory after processing: {post_process_memory}")
-
-            # Read the enhanced markdown content
-            logger.info("📖 Reading enhanced markdown content...")
-            content = self._read_enhanced_markdown(enhanced_md_path)
-            logger.info(f"✅ Enhanced markdown content read, length: {len(content)} characters")
-
-            logger.info("MonkeyOCR processing completed successfully")
-
-            result = {"success": True, "parsed_dir": output_dir, "enhanced_md_path": enhanced_md_path, "content": content, "content_list": [content] if content else [], "file_path": file_path}
-            logger.info(f"📊 Returning result: success={result['success']}, content_length={len(content)}")
-            
-            return result
-
-        except Exception as e:
-            logger.error(f"❌ Failed to parse document {file_path}: {e}")
-            logger.exception(f"Exception details for parse_document:")
-            
-            return {"success": False, "error": str(e), "file_path": file_path}
-        
-        finally:
-            # Step 3: Complete cleanup and shutdown
-            logger.info("🧹 Step 3: Starting complete cleanup and shutdown...")
-            start_time = time.time()
-            
-            try:
-                # Clean up the model instance
-                if model is not None:
-                    logger.info("Cleaning up MonkeyOCR model...")
-                    model.cleanup()
-                    del model
-                    model = None
-                
-                # Clean up singleton cached models
-                logger.info("Cleaning up singleton cached models...")
-                singleton = AtomModelSingleton()
-                cached_count = singleton.get_cached_model_count()
-                if cached_count > 0:
-                    logger.info(f"Found {cached_count} cached models, cleaning up...")
-                    singleton.cleanup_models()
-                else:
-                    logger.info("No cached models found in singleton")
-                
-                # Force garbage collection
-                logger.info("Forcing garbage collection...")
-                gc.collect()
-                
-                # Clear GPU cache
-                if torch and torch.cuda.is_available():
-                    logger.info("Clearing GPU cache...")
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-                
-                cleanup_time = time.time() - start_time
-                logger.info(f"Cleanup completed in {cleanup_time:.2f} seconds")
-                
-                # Log final memory state
-                final_memory = get_memory_usage()
-                logger.info(f"Final memory state: {final_memory}")
-                
-            except Exception as e:
-                logger.error(f"Error during cleanup: {e}")
-            
-            logger.info(f"🏁 parse_document finished for file: {file_path}")
-
     def _read_enhanced_markdown(self, md_path: str) -> str:
         """Read enhanced markdown content from cedd_parse output"""
         try:
@@ -295,16 +157,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         parser_config = kwargs.get("parser_config", {})
         logger.info(f"⚙️ Parser config: {parser_config}")
         
-        # Use layout_recognize field to determine processing mode
-        layout_recognize = parser_config.get("layout_recognize", "MonkeyOCR")
-        logger.info(f"🎯 Layout recognize mode: {layout_recognize}")
-        
-        # If configured for MonkeyOCR with DeepDoc-compatible path, run MonkeyDoc parser path
-        parser_config = kwargs.get("parser_config", {})
-        layout_recognize = parser_config.get("layout_recognize", "MonkeyOCR")
-        use_monkeydoc_path = layout_recognize == "MonkeyOCR"
-
-        if use_monkeydoc_path and MonkeyDocPdfParser is not None:
+        if MonkeyDocPdfParser is not None:
             safe_callback(0.4, "MonkeyOCR: rendering and layout/OCR...")
             try:
                 # Parse with DeepDoc-compatible MonkeyDoc
@@ -327,10 +180,12 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                     return_html=return_html,
                     omr_enabled=omr_enabled,
                     omr_min_area=omr_min_area,
-                    omr_max_aspect=omr_max_aspect,
-                    chunk_token_num=chunk_token_num,
+                    omr_max_aspect=omr_max_aspect
                 )
-
+                logger.info(f"🔍 MonkeyOCR: Packing sections: {sections}")
+                from monkeydoc.utils import pack_by_token_limit
+                sections = pack_by_token_limit(sections, chunk_token_num=chunk_token_num)
+                logger.info(f"🔍 MonkeyOCR: Packed sections: {sections}")
                 safe_callback(0.7, "MonkeyOCR: building chunks...")
                 from rag.nlp import tokenize_chunks, tokenize_table, rag_tokenizer
                 import re
@@ -357,81 +212,6 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                 return docs
             except Exception as e:
                 logger.warning(f"MonkeyDoc path failed, falling back to enhanced markdown path: {e}")
-                # Fall through to enhanced markdown path
-
-        # Parse document using cedd_parse (enhanced markdown path)
-        logger.info("📄 Failed to use MonkeyDoc, calling parser.parse_document...")
-        result = parser.parse_document(temp_path)
-        logger.info(f"📊 Parse result success: {result.get('success', False)}")
-        
-        if result.get("success"):
-            safe_callback(0.8, "Converting to RAGFlow chunks...")
-            logger.info("🔄 Step 4: Converting to RAGFlow chunks...")
-
-            # Convert to RAGFlow format
-            try:
-                logger.info("📦 Importing rag.nlp modules...")
-                from rag.nlp import tokenize, rag_tokenizer
-                import re
-                logger.info("✅ rag.nlp modules imported successfully")
-
-                content = result.get("content", "")
-                logger.info(f"📝 Content length: {len(content)} characters")
-                if not content:
-                    content = f"MonkeyOCR processed: {filename}"
-                    logger.warning("⚠️ No content found, using fallback content")
-
-                # Create RAGFlow chunk
-                logger.info("🏗️ Creating RAGFlow chunk structure...")
-                doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)), "doc_type_kwd": "monkeyocr"}
-                logger.info(f"📋 Chunk structure created: {list(doc.keys())}")
-
-                # Tokenize content
-                logger.info("🔤 Tokenizing content...")
-                eng = lang.lower() == "english"
-                logger.info(f"🌐 Language: {lang}, English mode: {eng}")
-                tokenize(doc, content, eng)
-                logger.info("✅ Content tokenization completed")
-
-                safe_callback(1.0, "MonkeyOCR processing complete")
-                logger.info("🎉 MonkeyOCR processing completed successfully")
-
-                # Cleanup temporary file
-                if binary and os.path.exists(temp_path):
-                    logger.info("🧹 Cleaning up temporary file...")
-                    os.unlink(temp_path)
-                    logger.info("✅ Temporary file cleaned up")
-
-                logger.info(f"📤 Returning {len([doc])} chunks")
-                return [doc]
-            except ImportError as e:
-                logger.error(f"❌ ImportError in rag.nlp: {e}")
-                # Fallback if rag.nlp is not available
-                safe_callback(0.9, "Using fallback chunk format...")
-                logger.info("🔄 Using fallback chunk format...")
-
-                content = result.get("content", f"MonkeyOCR processed: {filename}")
-
-                # Create simple chunk format
-                doc = {"docnm_kwd": filename, "title_tks": [filename.replace(".", " ").split()], "doc_type_kwd": "monkeyocr", "content": content, "content_tks": content.split()}
-                logger.info("✅ Fallback chunk format created")
-
-                safe_callback(1.0, "MonkeyOCR processing complete - Fallback mode")
-                logger.info("🎉 MonkeyOCR processing completed with fallback mode")
-
-                # Cleanup temporary file
-                if binary and os.path.exists(temp_path):
-                    logger.info("🧹 Cleaning up temporary file...")
-                    os.unlink(temp_path)
-                    logger.info("✅ Temporary file cleaned up")
-
-                logger.info(f"📤 Returning {len([doc])} chunks (fallback)")
-                return [doc]
-        else:
-            error_msg = f"MonkeyOCR failed: {result.get('error', 'Unknown error')}"
-            logger.error(f"❌ {error_msg}")
-            safe_callback(-1, error_msg)
-            return []
 
     except Exception as e:
         error_msg = f"MonkeyOCR processing failed: {str(e)}"
