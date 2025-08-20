@@ -131,12 +131,6 @@ def web_crawl():
             doc["parser_id"] = ParserType.PRESENTATION.value
         if re.search(r"\.(eml)$", filename):
             doc["parser_id"] = ParserType.EMAIL.value
-        # Check if file is supported by MonkeyOCR
-        from api.utils.file_utils import is_monkeyocr_supported
-        if is_monkeyocr_supported(filename):
-            doc["parser_id"] = ParserType.MONKEYOCR.value
-        DocumentService.insert(doc)
-        FileService.add_file_from_kb(doc, kb_folder["id"], kb.tenant_id)
     except Exception as e:
         return server_error_response(e)
     return get_json_result(data=True)

@@ -8,7 +8,7 @@ import { useMemo } from 'react';
 const enum DocumentType {
   DeepDOC = 'DeepDOC',
   PlainText = 'Plain Text',
-  MonkeyDoc = 'MonkeyDoc',
+  MonkeyOCR = 'MonkeyOCR',
 }
 
 const LayoutRecognize = () => {
@@ -19,13 +19,13 @@ const LayoutRecognize = () => {
     const list = [
       DocumentType.DeepDOC,
       DocumentType.PlainText,
-      DocumentType.MonkeyDoc,
+      DocumentType.MonkeyOCR,
     ].map((x) => ({
       label:
         x === DocumentType.PlainText
           ? t(camelCase(x))
-          : x === DocumentType.MonkeyDoc
-            ? 'MonkeyDoc'
+          : x === DocumentType.MonkeyOCR
+            ? 'MonkeyOCR'
             : 'DeepDoc',
       value: x,
     }));
