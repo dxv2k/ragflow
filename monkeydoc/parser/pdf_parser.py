@@ -39,31 +39,11 @@ class MonkeyDocPdfParser:
     """
 
     def __init__(self) -> None:
-        """Initialize parser state for the current document lifecycle.
-
-        Phase 1 only tracks pre-rendered page images to support future crop
-        operations. No ML models are loaded at this stage.
+        """
+        Initialize parser state for the current document lifecycle.
         """
 
         self.page_images: List[Image.Image] = []
-
-    @staticmethod
-    def _free_mem(tag: str = "") -> None:
-        """Release Python/accelerator caches to reduce peak usage."""
-        try:
-            gc.collect()
-        except Exception:
-            pass
-        try:
-            if torch is not None:
-                if getattr(torch, "cuda", None) and torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                if getattr(torch, "mps", None):
-                    torch.mps.empty_cache()  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        if tag:
-            logger.info("[MonkeyDoc] memory cleanup done (%s)", tag)
 
     def _render_pages(self, fnm: str | bytes, zoomin: int = 3, from_page: int = 0, to_page: int = 100000) -> None:
         """Render PDF pages and cache text-layer words.
@@ -81,10 +61,8 @@ class MonkeyDocPdfParser:
         try:
             with (pdfplumber.open(fnm) if isinstance(fnm, str) else pdfplumber.open(BytesIO(fnm))) as pdf:
                 for page in pdf.pages[from_page:to_page]:
-                    # Use annotated to get a PIL image
                     img = page.to_image(resolution=72 * zoomin, antialias=True).annotated
                     self.page_images.append(img)
-                    # Cache words from the text layer for no-crop OCR
                     try:
                         words = page.extract_words(x_tolerance=1, y_tolerance=1, keep_blank_chars=False, use_text_flow=True)
                     except Exception:
@@ -113,7 +91,6 @@ class MonkeyDocPdfParser:
         self._render_pages(fnm, zoomin=zoomin, from_page=from_page, to_page=to_page)
         logger.info("[MonkeyDoc] Rendering pages done: %d pages in %.1f ms", len(self.page_images), (time.time()-t0)*1000)
 
-        # Phase 2: populate per-page layout blocks (internal) for future steps
         mdl = None
         try:
             if MonkeyOCR is not None:
@@ -171,7 +148,10 @@ class MonkeyDocPdfParser:
                 return inter / max(min(a_area, b_area), 1e-6)
 
             for page_index, blocks in enumerate(self.page_layout):
-                words = self.page_words[page_index] if hasattr(self, "page_words") else []
+                try:
+                    words = self.page_words[page_index]
+                except Exception:
+                    words = []
                 for layoutno, blk in enumerate(blocks):
                     if blk.get("type") not in text_like_labels:
                         continue
@@ -229,7 +209,7 @@ class MonkeyDocPdfParser:
 
             logger.info("[MonkeyDoc] Text-layer extraction done: %d boxes, %d OCR fallbacks", len(self.boxes), len(ocr_fallback_rois))
 
-            # OCR fallback: in-memory ROI crop; original page image is not modified or persisted
+            # OCR fallback
             if ocr_fallback_rois:
                 crops: List[Image.Image] = []
                 meta: List[tuple[int, int, dict]] = []
@@ -246,17 +226,6 @@ class MonkeyDocPdfParser:
                     except Exception:
                         continue
                 if crops:
-                    # Free relation/layout before loading recognition to avoid OOM on MPS
-                    try:
-                        if mdl is not None:
-                            if hasattr(mdl, "layoutreader_model"):
-                                delattr(mdl, "layoutreader_model")
-                            if hasattr(mdl, "layout_model"):
-                                delattr(mdl, "layout_model")
-                            logger.info("[MonkeyDoc] Unloaded layout/relation before OCR fallback")
-                            self._free_mem("before_ocr_fallback")
-                    except Exception:
-                        pass
                     try:
                         texts = MonkeyOCRService.ocr_text(
                             crops,
@@ -285,32 +254,12 @@ class MonkeyDocPdfParser:
                         )
                 # Release temporary crops
                 del crops, meta, texts
-                self._free_mem("ocr_fallback")
             logger.info("[MonkeyDoc] OCR fallback done: total boxes %d", len(self.boxes))
         except Exception:
             logger.exception("MonkeyDocPdfParser text extraction phase")
             self.boxes = []
 
-        # Phase 4: merging and basic cleanup
-        # try:
-        #     logger.info("[MonkeyDoc] Merging & cleanup start")
-        #     # Replace with extracted helpers while preserving behavior
-        #     before_merge = len(self.boxes)
-        #     self.boxes = _bx_hmerge(self.boxes, getattr(self, 'mean_height', []))
-        #     self.boxes = _bx_vmerge(self.boxes, getattr(self, 'mean_height', []), getattr(self, 'mean_width', []))
-        #     self.boxes = _bx_cleanup(self.boxes)
-        #     after_merge = len(self.boxes)
-        #     logger.info("[MonkeyDoc] Merge/cleanup: %d -> %d", before_merge, after_merge)
-        #     # Build MonkeyOCR-compatible page entities after cleanup (Phase A)
-        #     try:
-        #         _ent_build(self)
-        #         logger.info("[MonkeyDoc] Built page entities: %d pages", len(getattr(self, "page_entities", [])))
-        #     except Exception:
-        #         logger.exception("MonkeyDocPdfParser build entities (Phase A)")
-        # except Exception:
-        #     logger.exception("MonkeyDocPdfParser merging & cleanup")
-
-        # Phase 5: tables and figures extraction
+        # Tables/Figures/OMR extraction
         tbls_or_figs: List[Any] = []
         try:
             logger.info("[MonkeyDoc] Tables/Figures/OMR extraction start")
@@ -326,32 +275,17 @@ class MonkeyDocPdfParser:
         except Exception:
             logger.exception("MonkeyDocPdfParser tables/figures extraction")
 
-        # Phase 6: build sections with inline position tags from all text boxes
+        # Build sections with inline position tags from all text boxes
         try:
             sections: List[Tuple[str, str]] = self._build_sections_from_boxes(zoomin=zoomin, mdl=mdl)
-            # Optional post-pass: horizontal merge + dedup to reduce duplicates.
-
-            from monkeydoc.utils import merge_and_dedup  # lightweight helper
+            from monkeydoc.utils import merge_and_dedup
             sections = merge_and_dedup(sections, y_tol=2.0, min_horiz_overlap=0.1, cover_ratio=0.8)
-
         except Exception:
             logger.exception("MonkeyDocPdfParser build sections")
             sections = []
 
-        if mdl is not None:
-            try:
-                mdl.cleanup()
-            except Exception:
-                pass
-        # Final memory cleanup
-        self._free_mem("final")
-
         return sections, tbls_or_figs
 
-    # -------------------- Phase 4/6 helpers --------------------
-
-
-    # Phase 6: inline tag helpers and crop API
     def _line_tag(self, bx: dict) -> str:
         """Generate DeepDoc-compatible inline position tag for a box."""
         try:
@@ -631,7 +565,6 @@ class MonkeyDocPdfParser:
             ocr_imgs: List[Image.Image] = [fig_crops[i] for i in ocr_indices]
             ocr_preds: List[str] = []
             if ocr_imgs:
-                self._free_mem("before_figure_ocr")
                 try:
                     ocr_preds = MonkeyOCRService.ocr_text(
                         ocr_imgs,
@@ -673,7 +606,6 @@ class MonkeyDocPdfParser:
             del fig_crops, fig_meta, fig_texts
         except Exception:
             pass
-        self._free_mem("figures")
                     
         # Process tables (also append text to sections)
         table_images: List[Image.Image] = []
@@ -724,5 +656,3 @@ class MonkeyDocPdfParser:
             return list(zip(results, positions))
         # When images are not needed, return empty list (info appended to sections)
         return []
-
-    # API-compatible helpers (implemented above)
