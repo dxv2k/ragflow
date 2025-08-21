@@ -199,7 +199,7 @@ ENV CUDA_VISIBLE_DEVICES=0
 RUN /ragflow/.venv/bin/python -m ensurepip --upgrade
 
 # Now that pip is installed in the venv, install MonkeyOCR dependencies
-RUN /ragflow/.venv/bin/python -m pip install qwen_vl_utils==0.0.10 huggingface_hub && \
+RUN /ragflow/.venv/bin/python -m pip install qwen_vl_utils==0.0.8 huggingface_hub && \
     cd /ragflow/monkeyocr && \
     /ragflow/.venv/bin/python -m pip install -e . && \
     DISABLE_TURBOMIND=1 /ragflow/.venv/bin/python -m pip install git+https://github.com/InternLM/lmdeploy.git
@@ -210,11 +210,11 @@ RUN mkdir -p /ragflow/monkeyocr/cache /ragflow/monkeyocr/model_weight
 # Download MonkeyOCR models (quantized version for efficiency)
 WORKDIR /ragflow/monkeyocr
 RUN --mount=type=cache,id=hf_cache,target=/root/.cache/huggingface,sharing=locked \
-    python tools/download_model.py -t quantize || \
+    /ragflow/.venv/bin/python tools/download_model.py -t quantize || \
     (echo "Quantized model download failed, trying regular model..." && \
-     python tools/download_model.py) || \
+     /ragflow/.venv/bin/python tools/download_model.py) || \
     (echo "HuggingFace download failed, trying ModelScope..." && \
-     python tools/download_model.py -t modelscope) || \
+     /ragflow/.venv/bin/python tools/download_model.py -t modelscope) || \
     (echo "All download methods failed - models will be downloaded at runtime" && exit 0)
 
 # Verify model download
