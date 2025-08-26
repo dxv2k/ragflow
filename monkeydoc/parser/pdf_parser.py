@@ -26,7 +26,7 @@ from monkeyocr.magic_pdf.model.custom_model import MonkeyOCR  # type: ignore
 from pathlib import Path
 
 
-logger = get_monkeyocr_logger("monkeydoc.parser.pdf_parser")
+logger = get_monkeyocr_logger("CEDD OCR")
 
 
 class MonkeyDocPdfParser:
@@ -75,7 +75,8 @@ class MonkeyDocPdfParser:
 
     # API-compatible __call__
     def __call__(self, fnm: str | bytes, need_image: bool = True, zoomin: int = 3, return_html: bool = False,
-                 omr_enabled: bool = True, omr_min_area: float = 500.0, omr_max_aspect: float = 10.0, from_page: int = 0, to_page: int = 100000) -> Tuple[List[Tuple[str, str]], List[Any]]:
+                 omr_enabled: bool = True, omr_min_area: float = 500.0, omr_max_aspect: float = 10.0, from_page: int = 0, to_page: int = 100000,
+                 callback=None) -> Tuple[List[Tuple[str, str]], List[Any]]:
         """Parse a PDF and return DeepDoc-compatible outputs.
 
         Returns
@@ -87,26 +88,36 @@ class MonkeyDocPdfParser:
         """
 
         t0 = time.time()
-        logger.info("[MonkeyDoc] Rendering pages start")
+        logger.info("[CEDD OCR] Rendering pages start")
         self._render_pages(fnm, zoomin=zoomin, from_page=from_page, to_page=to_page)
-        logger.info("[MonkeyDoc] Rendering pages done: %d pages in %.1f ms", len(self.page_images), (time.time()-t0)*1000)
+        try:
+            if callback:
+                callback(0.15, "CEDD OCR: pages rendered")
+        except Exception:
+            pass
+        logger.info("[CEDD OCR] Rendering pages done: %d pages in %.1f ms", len(self.page_images), (time.time()-t0)*1000)
 
         mdl = None
         try:
             if MonkeyOCR is not None:
                 mdl = MonkeyOCR(str(Path(__file__).resolve().parents[2] / "monkeyocr" / "model_configs.yaml"))
             t1 = time.time()
-            logger.info("[MonkeyDoc] Layout detection start")
+            logger.info("[CEDD OCR] Layout detection start")
             self.page_layout: List[List[dict]] = MonkeyOCRService.detect_layout(
                 self.page_images, zoomin=zoomin, model=mdl
             )
-            logger.info("[MonkeyDoc] Layout detection done in %.1f ms", (time.time()-t1)*1000)
+            logger.info("[CEDD OCR] Layout detection done in %.1f ms", (time.time()-t1)*1000)
+            try:
+                if callback:
+                    callback(0.25, "CEDD OCR: layout detected")
+            except Exception:
+                pass
             # Stats by label
             label_stats = {}
             for blocks in self.page_layout:
                 for b in blocks:
                     label_stats[b.get("type", "text")] = label_stats.get(b.get("type", "text"), 0) + 1
-            logger.info("[MonkeyDoc] Layout counts: %s", label_stats)
+            logger.info("[CEDD OCR] Layout counts: %s", label_stats)
             # Rescale layout blocks from pixel coords to PDF units using per-page sizes
             try:
                 with (pdfplumber.open(fnm) if isinstance(fnm, str) else pdfplumber.open(BytesIO(fnm))) as pdf:
@@ -130,7 +141,7 @@ class MonkeyDocPdfParser:
         # Phase 3: Text extraction via text-layer first, with minimal OCR fallback
         self.boxes: List[dict] = []
         try:
-            logger.info("[MonkeyDoc] Text-layer extraction start")
+            logger.info("[CEDD OCR] Text-layer extraction start")
             text_like_labels = {"text", "title"}
             ocr_fallback_rois: List[tuple[int, int, dict]] = []  # (page_index, layoutno, blk)
 
@@ -147,6 +158,7 @@ class MonkeyDocPdfParser:
                 b_area = max(0.0, (bx1 - bx0) * (by1 - by0))
                 return inter / max(min(a_area, b_area), 1e-6)
 
+            total_pages = max(len(self.page_layout), 1)
             for page_index, blocks in enumerate(self.page_layout):
                 try:
                     words = self.page_words[page_index]
@@ -161,7 +173,14 @@ class MonkeyDocPdfParser:
                     inside: List[dict] = []
                     for w in words or []:
                         try:
-                            if iou(blk_box, w) >= 0.0:
+                            wx0 = float(w.get("x0", 0.0))
+                            wx1 = float(w.get("x1", 0.0))
+                            wt = float(w.get("top", 0.0))
+                            wb = float(w.get("bottom", 0.0))
+                            cx = 0.5 * (wx0 + wx1)
+                            cy = 0.5 * (wt + wb)
+                            # Consider a word belonging to a block if its center lies inside the block
+                            if x0 <= cx <= x1 and top <= cy <= bottom:
                                 inside.append(w)
                         except Exception:
                             continue
@@ -171,15 +190,24 @@ class MonkeyDocPdfParser:
                         inside.sort(key=lambda w: (float(w.get("top", 0.0)), float(w.get("x0", 0.0))))
                         # Group by near-equal top to form lines
                         lines: List[List[dict]] = []
+                        # Estimate a robust vertical threshold using median word heights
+                        try:
+                            heights = [max(0.0, float(w.get("bottom", 0.0)) - float(w.get("top", 0.0))) for w in inside if w is not None]
+                            med_h = median([h for h in heights if h > 0]) if heights else 0.0
+                        except Exception:
+                            med_h = 0.0
                         for wd in inside:
                             if not lines:
                                 lines.append([wd])
                                 continue
                             last_line = lines[-1]
                             y_gap = abs(float(wd.get("top", 0.0)) - float(last_line[0].get("top", 0.0)))
-                            # Threshold: 2 pixels in PDF units (pre-zoom) or fraction of height
+                            # Threshold: min of (median-based) and (current-line-based) caps
                             h_ref = float(last_line[0].get("bottom", 0.0)) - float(last_line[0].get("top", 0.0))
-                            if y_gap <= max(2.0, 0.5 * max(h_ref, 1.0)):
+                            thr_med = 0.4 * max(med_h, 1.0)
+                            thr_cur = 0.5 * max(h_ref, 1.0)
+                            thr = max(1.5, min(thr_med, thr_cur))
+                            if y_gap <= thr:
                                 last_line.append(wd)
                             else:
                                 lines.append([wd])
@@ -190,22 +218,58 @@ class MonkeyDocPdfParser:
                             text_lines.append(" ".join([str(w.get("text", "")).strip() for w in ln if str(w.get("text", "")).strip()]))
                         merged_text = ("\n" if blk.get("type") == "title" else " ").join([t for t in text_lines if t])
                         if merged_text.strip():
-                            self.boxes.append(
-                                {
-                                    "x0": x0,
-                                    "x1": x1,
-                                    "top": top,
-                                    "bottom": bottom,
-                                    "text": merged_text.strip(),
-                                    "layout_type": blk.get("type", "text"),
-                                    "page_number": page_index + 1,
-                                    "layoutno": layoutno,
-                                }
-                            )
+                            # Use tight union bounds of the contributing words for better tag alignment
+                            try:
+                                ux0 = min(float(w.get("x0", x0)) for w in inside)
+                                ux1 = max(float(w.get("x1", x1)) for w in inside)
+                                utop = min(float(w.get("top", top)) for w in inside)
+                                ubot = max(float(w.get("bottom", bottom)) for w in inside)
+                                # Small padding to avoid clipping
+                                pad = 0.5
+                                ux0 = max(0.0, ux0 - pad)
+                                ux1 = max(ux0 + 1e-3, ux1 + pad)
+                                utop = max(0.0, utop - pad)
+                                ubot = max(utop + 1e-3, ubot + pad)
+                            except Exception:
+                                ux0, ux1, utop, ubot = x0, x1, top, bottom
+
+                            new_box = {
+                                "x0": ux0,
+                                "x1": ux1,
+                                "top": utop,
+                                "bottom": ubot,
+                                "text": merged_text.strip(),
+                                "layout_type": blk.get("type", "text"),
+                                "page_number": page_index + 1,
+                                "layoutno": layoutno,
+                            }
+
+                            # Deduplicate: skip if same text with highly overlapping box already exists on this page
+                            is_dup = False
+                            try:
+                                for ob in self.boxes:
+                                    if int(ob.get("page_number", -1)) != new_box["page_number"]:
+                                        continue
+                                    if str(ob.get("text", "")).strip() != new_box["text"]:
+                                        continue
+                                    if iou(ob, new_box) >= 0.8:
+                                        is_dup = True
+                                        break
+                            except Exception:
+                                is_dup = False
+                            if not is_dup:
+                                self.boxes.append(new_box)
                             continue
 
                     # No words matched → schedule OCR fallback
                     ocr_fallback_rois.append((page_index, layoutno, blk))
+
+            try:
+                if callback:
+                    # progress proportionally with pages processed
+                    callback(min(0.55, 0.25 + 0.3 * (page_index + 1) / total_pages), f"CEDD OCR: extracted text for page {page_index + 1}/{total_pages}")
+            except Exception:
+                pass
 
             logger.info("[MonkeyDoc] Text-layer extraction done: %d boxes, %d OCR fallbacks", len(self.boxes), len(ocr_fallback_rois))
 
@@ -221,7 +285,10 @@ class MonkeyDocPdfParser:
                     t = max(0, int(top * zoomin))
                     b = max(t + 1, int(bottom * zoomin))
                     try:
-                        crops.append(self.page_images[page_index].crop((l, t, r, b)))
+                        if blk.get("type") == "figure":
+                            continue # _extract_tables_figures will handle this later
+                        else:
+                            crops.append(self.page_images[page_index].crop((l, t, r, b)))
                         meta.append((page_index, layoutno, blk))
                     except Exception:
                         continue
@@ -234,27 +301,45 @@ class MonkeyDocPdfParser:
                         )
                     except Exception:
                         texts = [""] * len(crops)
+                    try:
+                        if callback:
+                            callback(0.65, f"CEDD OCR: OCR fallback processed {len(crops)} regions")
+                    except Exception:
+                        pass
                     for txt, (page_index, layoutno, blk) in zip(texts, meta):
                         if not isinstance(txt, str):
                             txt = str(txt)
                         txt = txt.strip()
                         if not txt:
                             continue
-                        self.boxes.append(
-                            {
-                                "x0": float(blk["x0"]),
-                                "x1": float(blk["x1"]),
-                                "top": float(blk["top"]),
-                                "bottom": float(blk["bottom"]),
-                                "text": txt,
-                                "layout_type": blk.get("type", "text"),
-                                "page_number": page_index + 1,
-                                "layoutno": layoutno,
-                            }
-                        )
+                        new_box = {
+                            "x0": float(blk["x0"]),
+                            "x1": float(blk["x1"]),
+                            "top": float(blk["top"]),
+                            "bottom": float(blk["bottom"]),
+                            "text": txt,
+                            "layout_type": blk.get("type", "text"),
+                            "page_number": page_index + 1,
+                            "layoutno": layoutno,
+                        }
+                        # Deduplicate OCR fallback results as well
+                        is_dup = False
+                        try:
+                            for ob in self.boxes:
+                                if int(ob.get("page_number", -1)) != new_box["page_number"]:
+                                    continue
+                                if str(ob.get("text", "")).strip() != new_box["text"]:
+                                    continue
+                                if iou(ob, new_box) >= 0.8:
+                                    is_dup = True
+                                    break
+                        except Exception:
+                            is_dup = False
+                        if not is_dup:
+                            self.boxes.append(new_box)
                 # Release temporary crops
                 del crops, meta, texts
-            logger.info("[MonkeyDoc] OCR fallback done: total boxes %d", len(self.boxes))
+            logger.info("[CEDD OCR] OCR fallback done: total boxes %d", len(self.boxes))
         except Exception:
             logger.exception("MonkeyDocPdfParser text extraction phase")
             self.boxes = []
@@ -262,7 +347,7 @@ class MonkeyDocPdfParser:
         # Tables/Figures/OMR extraction
         tbls_or_figs: List[Any] = []
         try:
-            logger.info("[MonkeyDoc] Tables/Figures/OMR extraction start")
+            logger.info("[CEDD OCR] Tables/Figures/OMR extraction start")
             tbls_or_figs = self._extract_tables_figures(
                 need_image=need_image,
                 zoomin=zoomin,
@@ -271,19 +356,62 @@ class MonkeyDocPdfParser:
                 omr_min_area=omr_min_area,
                 omr_max_aspect=omr_max_aspect,
             )
-            logger.info("[MonkeyDoc] Tables/Figures/OMR extraction done: %d entries", len(tbls_or_figs))
+            logger.info("[CEDD OCR] Tables/Figures/OMR extraction done: %d entries", len(tbls_or_figs))
+            try:
+                if callback:
+                    callback(0.75, "CEDD OCR: tables/figures processed")
+            except Exception:
+                pass
         except Exception:
             logger.exception("MonkeyDocPdfParser tables/figures extraction")
 
         # Build sections with inline position tags from all text boxes
         try:
+            # Final deduplication using Non-Maximum Suppression on same-text boxes per page
+            try:
+                by_page_text = {}
+                for b in list(self.boxes):
+                    key = (int(b.get("page_number", 0)), str(b.get("text", "")).strip())
+                    if not key[1]:
+                        continue
+                    by_page_text.setdefault(key, []).append(b)
+                pruned_boxes: List[dict] = []
+                for (_, _), arr in by_page_text.items():
+                    arr_sorted = sorted(arr, key=lambda d: (float(d.get("bottom", 0.0)) - float(d.get("top", 0.0))) * (float(d.get("x1", 0.0)) - float(d.get("x0", 0.0))), reverse=True)
+                    kept: List[dict] = []
+                    for cand in arr_sorted:
+                        overlapped = False
+                        for kept_box in kept:
+                            try:
+                                if iou(kept_box, cand) >= 0.7:
+                                    overlapped = True
+                                    break
+                            except Exception:
+                                continue
+                        if not overlapped:
+                            kept.append(cand)
+                    pruned_boxes.extend(kept)
+                self.boxes = pruned_boxes
+            except Exception:
+                pass
+
             sections: List[Tuple[str, str]] = self._build_sections_from_boxes(zoomin=zoomin, mdl=mdl)
             from monkeydoc.utils import merge_and_dedup
             sections = merge_and_dedup(sections, y_tol=2.0, min_horiz_overlap=0.1, cover_ratio=0.8)
+            try:
+                if callback:
+                    callback(0.85, f"CEDD OCR: built {len(sections)} sections")
+            except Exception:
+                pass
         except Exception:
             logger.exception("MonkeyDocPdfParser build sections")
             sections = []
 
+        try:
+            if callback:
+                callback(0.9, "CEDD OCR: parser returning results")
+        except Exception:
+            pass
         return sections, tbls_or_figs
 
     def _line_tag(self, bx: dict) -> str:
@@ -568,7 +696,7 @@ class MonkeyDocPdfParser:
                 try:
                     ocr_preds = MonkeyOCRService.ocr_text(
                         ocr_imgs,
-                        instruction="This region may contain handwriting or image text. Extract readable text only.",
+                        instruction="This region may contain handwriting or image text or character. Extract readable text or character only. If there is no text or character, return \"\".",
                     )
                 except Exception:
                     ocr_preds = [""] * len(ocr_imgs)
@@ -580,7 +708,7 @@ class MonkeyDocPdfParser:
                     continue
                 rt = per_idx_ratings[i]
                 if rt and any((r > 0) for r in rt):
-                    fig_texts[i] = ", ".join([f"Item {j+1}: {r}" for j, r in enumerate(rt)])
+                    fig_texts[i] = "".join([f"Item {j+1}: score {r}, \n" for j, r in enumerate(rt)])
                 else:
                     fig_texts[i] = next(ocr_it, "")
 
