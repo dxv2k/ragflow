@@ -9,6 +9,7 @@ and PDF rasterization only.
 __all__ = [
     "parser",
     "service",
+    "utils",
 ]
 
 
