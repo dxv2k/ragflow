@@ -8,46 +8,10 @@ include:
   - ./docker-compose-base.yml
 
 services:
-  lmdeploy:
-    build:
-      context: ../
-      dockerfile: Dockerfile.monkeyocr
-    platform: linux/amd64
-    container_name: lmdeploy-server
-    command: bash -lc "python -m lmdeploy.serve.openai.api_server --model-path ${MONKEYOCR_MODEL_PATH} --server-port ${LMDEPLOY_PORT} --host 0.0.0.0 --chat-template ${LMDEPLOY_CHAT_TEMPLATE}"
-    ports:
-      - 8081:8081
-    volumes:
-      - monkeyocr_models:/ragflow/monkeyocr/model_weight
-      - monkeyocr_models:/root/models
-      - monkeyocr_cache:/ragflow/monkeyocr/cache
-    environment:
-      - TZ=${TIMEZONE}
-      - HF_ENDPOINT=${HF_ENDPOINT}
-      - MONKEYOCR_MODEL_PATH=/ragflow/monkeyocr/model_weight/Recognition
-      - HF_HUB_CACHE=/ragflow/monkeyocr/model_weight
-      - MODELSCOPE_CACHE=/ragflow/monkeyocr/model_weight
-      - PYTHONPATH=/ragflow/:/ragflow/monkeyocr
-      - CUDA_VISIBLE_DEVICES=0
-      - LMDEPLOY_PORT=8081
-      - LMDEPLOY_CHAT_TEMPLATE=qwen2d5-vl
-    networks:
-      - ragflow
-    restart: on-failure
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
   ragflow:
     depends_on:
       mysql:
         condition: service_healthy
-      lmdeploy:
-        condition: service_started
       # minio:
       #   condition: service_healthy
     build:
@@ -59,7 +23,7 @@ services:
       - --enable-mcpserver
       - --mcp-host=0.0.0.0
       - --mcp-port=9382
-      - --mcp-base-url=http://127.0.0.1:9380
+      - --mcp-base-url=http://localhost:9380
       - --mcp-script-path=/ragflow/mcp/server/server.py
       - --mcp-mode=self-host
       - --mcp-host-api-key=ragflow-ljMjA5MDUwM2QzMzExZjA4MmNmMDI0Mm
@@ -67,9 +31,7 @@ services:
     ports:
       - ${SVR_HTTP_PORT}:9380
       - 81:81
-      - 443:443
-      - 5678:5678
-      - 5679:5679
+      # Expose HTTPS only if you configure TLS in nginx (443)
       - 9382:9382 # entry for MCP (host_port:docker_port). The docker_port must match the value you set for `mcp-port` above.
     volumes:
       - ./ragflow-logs:/ragflow/logs
@@ -89,15 +51,14 @@ services:
       - HF_ENDPOINT=${HF_ENDPOINT}
       - MACOS=${MACOS}
       # MonkeyOCR specific environment variables
+      - MONKEYOCR_API_URL=${MONKEYOCR_API_URL}
+      - MONKEYOCR_MODEL_NAME=${MONKEYOCR_MODEL_NAME}
+      - MONKEYOCR_API_KEY=${MONKEYOCR_API_KEY}
       - MONKEYOCR_ENABLED=true
       - MONKEYOCR_CONFIG_PATH=/ragflow/conf/monkey_ocr_config.json
       - MONKEYOCR_MODEL_PATH=/ragflow/monkeyocr/model_weight/Recognition
       - MONKEYOCR_CACHE_DIR=/ragflow/monkeyocr/cache
-      - MONKEYOCR_LMDEPLOY_URL=http://lmdeploy:8081/v1
-      - CUDA_VISIBLE_DEVICES=0
       - HF_HUB_CACHE=/ragflow/monkeyocr/model_weight
-      - MODELSCOPE_CACHE=/ragflow/monkeyocr/model_weight
-      - PYTHONPATH=/ragflow/:/ragflow/monkeyocr
     networks:
       - ragflow
     restart: on-failure
@@ -106,13 +67,13 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # GPU configuration (from docker-compose-gpu.yml pattern)
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
 # MonkeyOCR specific volumes
 volumes:

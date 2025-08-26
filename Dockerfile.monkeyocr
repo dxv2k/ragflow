@@ -1,10 +1,10 @@
-# Dockerfile.monkeyocr-complete
+# Dockerfile.monkeyocr
 # Complete RAGFlow Dockerfile with MonkeyOCR integration
-# Based on official RAGFlow Dockerfile with CUDA support added
+# Based on official RAGFlow Dockerfile
 # -----------------------------------------------------------------------------
 
-# ========== BASE STAGE (Modified for CUDA) ==========
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS base
+# ========== BASE STAGE ==========
+FROM ubuntu:22.04 AS base
 USER root
 SHELL ["/bin/bash", "-c"]
 
@@ -179,6 +179,7 @@ COPY agentic_reasoning agentic_reasoning
 COPY pyproject.toml uv.lock ./
 COPY mcp mcp
 COPY plugin plugin
+COPY monkeydoc monkeydoc
 
 # ========== ADD MONKEYOCR INTEGRATION (NEW) ==========
 # Copy MonkeyOCR source code
@@ -193,29 +194,22 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 ENV PYTHONPATH=/ragflow/:/ragflow/monkeyocr
 ENV HF_HUB_CACHE=/ragflow/monkeyocr/model_weight
 ENV MODELSCOPE_CACHE=/ragflow/monkeyocr/model_weight
-ENV CUDA_VISIBLE_DEVICES=0
+# Set CUDA devices at runtime if GPU is desired. Leave unset for CPU-only.
+# ENV CUDA_VISIBLE_DEVICES=0
 
 # FIX: The copied venv is missing pip. Use ensurepip to install it.
 RUN /ragflow/.venv/bin/python -m ensurepip --upgrade
 
 # Now that pip is installed in the venv, install MonkeyOCR dependencies
-RUN /ragflow/.venv/bin/python -m pip install qwen_vl_utils==0.0.8 huggingface_hub && \
+RUN /ragflow/.venv/bin/python -m pip install huggingface_hub && \
     cd /ragflow/monkeyocr && \
-    /ragflow/.venv/bin/python -m pip install -e . && \
-    DISABLE_TURBOMIND=1 /ragflow/.venv/bin/python -m pip install git+https://github.com/InternLM/lmdeploy.git
-
+    /ragflow/.venv/bin/python -m pip install -e .
 # Create MonkeyOCR directories
 RUN mkdir -p /ragflow/monkeyocr/cache /ragflow/monkeyocr/model_weight
 
 # Download MonkeyOCR models (quantized version for efficiency)
 WORKDIR /ragflow/monkeyocr
-RUN --mount=type=cache,id=hf_cache,target=/root/.cache/huggingface,sharing=locked \
-    /ragflow/.venv/bin/python tools/download_model.py -t quantize || \
-    (echo "Quantized model download failed, trying regular model..." && \
-     /ragflow/.venv/bin/python tools/download_model.py) || \
-    (echo "HuggingFace download failed, trying ModelScope..." && \
-     /ragflow/.venv/bin/python tools/download_model.py -t modelscope) || \
-    (echo "All download methods failed - models will be downloaded at runtime" && exit 0)
+RUN /ragflow/.venv/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='TrungTin0105/Structure', local_dir='/ragflow/monkeyocr/model_weight', local_dir_use_symlinks=False)"
 
 # Verify model download
 RUN if [ -d "/ragflow/monkeyocr/model_weight" ] && [ "$(ls -A /ragflow/monkeyocr/model_weight)" ]; then \
@@ -231,6 +225,7 @@ WORKDIR /ragflow
 COPY docker/service_conf.yaml.template ./conf/service_conf.yaml.template
 COPY docker/entrypoint.sh ./
 RUN chmod +x ./entrypoint*.sh
+RUN mkdir -p /ragflow/logs
 
 # Copy compiled web pages (SAME AS OFFICIAL)
 COPY --from=builder /ragflow/web/dist /ragflow/web/dist
