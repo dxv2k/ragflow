@@ -194,7 +194,7 @@ async def list_tools(*, connector) -> list[types.Tool]:
 
     return [
         types.Tool(
-            name="ragflow_retrieval",
+            name="knowledge_base_retrieval",
             description="Retrieve relevant chunks from the RAGFlow retrieve interface based on the question. You can optionally specify dataset_ids to search only specific datasets, or omit dataset_ids entirely to search across ALL available datasets. You can also optionally specify document_ids to search within specific documents. When dataset_ids is not provided or is empty, the system will automatically search across all available datasets. Below is the list of all available datasets, including their descriptions and IDs:"
             + dataset_description,
             inputSchema={
@@ -221,7 +221,7 @@ async def list_tools(*, connector) -> list[types.Tool]:
 @app.call_tool()
 @with_api_key(required=True)
 async def call_tool(name: str, arguments: dict, *, connector) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    if name == "ragflow_retrieval":
+    if name == "knowledge_base_retrieval":
         document_ids = arguments.get("document_ids", [])
         dataset_ids = arguments.get("dataset_ids", [])
         
