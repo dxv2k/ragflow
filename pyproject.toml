@@ -55,6 +55,7 @@ dependencies = [
     "mistralai==0.4.2",
     "nltk==3.9.1",
     "numpy>=1.26.0,<2.0.0",
+    "onnx==1.17.0",
     "ollama==0.2.1",
     "onnxruntime==1.19.2; sys_platform == 'darwin' or platform_machine != 'x86_64'",
     "onnxruntime-gpu==1.19.2; sys_platform != 'darwin' and platform_machine == 'x86_64'",
