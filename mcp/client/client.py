@@ -70,6 +70,44 @@ class RAGFlowMCPClient:
                 formatted.append(f'  {key}: {value}')
         return "{\n" + ",\n".join(formatted) + "\n}"
 
+    def _print_full_calltool_result(self, response: Any, label: str = "Full Response") -> None:
+        """Print the full CallToolResult including all content fields for debugging."""
+        try:
+            print(f"\n🔎 {label} (model_dump):")
+            if hasattr(response, "model_dump"):
+                dumped = response.model_dump(by_alias=True, exclude_none=False)
+                print(json.dumps(dumped, indent=2, ensure_ascii=False))
+            else:
+                # Fallback if not a Pydantic model
+                print(str(response))
+
+            # Print each content item in detail as well
+            if getattr(response, "content", None):
+                print("\n🧩 Content Items (detailed):")
+                for idx, content in enumerate(response.content, 1):
+                    print(f"\n  • Item {idx} type={getattr(content, 'type', 'unknown')}")
+                    try:
+                        if hasattr(content, "model_dump"):
+                            cdump = content.model_dump(by_alias=True, exclude_none=False)
+                            print(json.dumps(cdump, indent=2, ensure_ascii=False))
+                        else:
+                            # Best-effort dump of attributes
+                            attrs = {k: getattr(content, k) for k in dir(content) if not k.startswith("_")}
+                            print(json.dumps(attrs, indent=2, default=str, ensure_ascii=False))
+                    except Exception as e:  # pragma: no cover - best effort
+                        print(f"    (Failed to dump content item: {e})")
+        except Exception as e:  # pragma: no cover - best effort
+            print(f"(Failed to print full response: {e})")
+
+    def _print_text_as_pretty_json(self, text: str, label: str = "JSON") -> None:
+        """Try to parse a text blob as JSON and pretty-print it; fallback to raw text."""
+        try:
+            obj = json.loads(text)
+            print(f"\n🔎 {label} (pretty):")
+            print(json.dumps(obj, indent=2, ensure_ascii=False))
+        except Exception:
+            print(text)
+
     async def initialize_session(self):
         """Initialize MCP session with verbose logging"""
         logger.info("🔌 Attempting to connect to MCP server...")
@@ -152,6 +190,9 @@ class RAGFlowMCPClient:
         else:
             print(f"📄 Raw Response: {response}")
 
+        # Always show full response for verification
+        self._print_full_calltool_result(response, label="list_datasets: Full CallToolResult")
+
         # Test with pagination
         print(f"\n{'-' * 40}")
         print("🧪 Testing list_datasets with pagination...")
@@ -172,6 +213,9 @@ class RAGFlowMCPClient:
             for content in response.content:
                 if hasattr(content, 'text'):
                     print(content.text)
+
+        # Full paginated response
+        self._print_full_calltool_result(response, label="list_datasets (paginated): Full CallToolResult")
 
         return response
 
@@ -209,6 +253,8 @@ class RAGFlowMCPClient:
                         print(content.text)
             else:
                 print(f"📄 Raw Response: {response}")
+            # Full response
+            self._print_full_calltool_result(response, label="list_documents: Full CallToolResult")
                 
         except Exception as e:
             print(f"❌ Error testing list_documents: {str(e)}")
@@ -238,6 +284,8 @@ class RAGFlowMCPClient:
                 for content in response.content:
                     if hasattr(content, 'text'):
                         print(content.text)
+            # Full filtered response
+            self._print_full_calltool_result(response, label="list_documents (filtered): Full CallToolResult")
         except Exception as e:
             print(f"❌ Error testing filtered list_documents: {str(e)}")
 
@@ -271,10 +319,11 @@ class RAGFlowMCPClient:
             print(f"📥 Response type: {type(response).__name__}")
             
             if hasattr(response, 'content') and response.content:
-                print("\n📄 Auto-discovery Response:")
+                # Expect a single JSON content item
+                print("\n📄 Retrieval JSON Response:")
                 for content in response.content:
-                    if hasattr(content, 'text'):
-                        print(content.text)
+                    if hasattr(content, 'text') and content.text:
+                        self._print_text_as_pretty_json(content.text, label="knowledge_base_retrieval")
             else:
                 print(f"📄 Raw Response: {response}")
                 
@@ -302,10 +351,10 @@ class RAGFlowMCPClient:
                 
                 print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
                 if hasattr(response, 'content') and response.content:
-                    print("\n📄 Specific Dataset Response:")
+                    print("\n📄 Retrieval JSON Response (specific):")
                     for content in response.content:
-                        if hasattr(content, 'text'):
-                            print(content.text)
+                        if hasattr(content, 'text') and content.text:
+                            self._print_text_as_pretty_json(content.text, label="knowledge_base_retrieval")
             except Exception as e:
                 print(f"❌ Error testing specific dataset retrieval: {str(e)}")
 
@@ -352,9 +401,10 @@ class RAGFlowMCPClient:
             print("2. 📚 Test list_datasets")
             print("3. 📁 Test list_documents")
             print("4. 🔍 Test knowledge_base_retrieval")
-            print("5. 🛠️  Show available tools")
-            print("6. 🔄 Custom tool call")
-            print("7. ❌ Exit")
+            print("5. 🔎 Read chunk by ID")
+            print("6. 🛠️  Show available tools")
+            print("7. 🔄 Custom tool call")
+            print("8. ❌ Exit")
             print("=" * 50)
             
             try:
@@ -379,17 +429,20 @@ class RAGFlowMCPClient:
                     await self.test_knowledge_base_retrieval(dataset_ids if dataset_ids else None, question if question else None)
                     
                 elif choice == "5":
-                    await self.discover_tools()
+                    await self.test_read_chunk()
                     
                 elif choice == "6":
-                    await self.custom_tool_call()
+                    await self.discover_tools()
                     
                 elif choice == "7":
+                    await self.custom_tool_call()
+                    
+                elif choice == "8":
                     print("👋 Goodbye!")
                     break
                     
                 else:
-                    print("❌ Invalid choice. Please select 1-7.")
+                    print("❌ Invalid choice. Please select 1-8.")
                     
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
@@ -436,13 +489,131 @@ class RAGFlowMCPClient:
             if hasattr(response, 'content') and response.content:
                 print("\n📄 Response Content:")
                 for content in response.content:
-                    if hasattr(content, 'text'):
-                        print(content.text)
+                    if hasattr(content, 'text') and content.text:
+                        # Try to pretty print JSON if present
+                        self._print_text_as_pretty_json(content.text, label=tool_name)
+                    else:
+                        print(content)
             else:
                 print(f"📄 Raw Response: {response}")
+            # Full custom call response
+            self._print_full_calltool_result(response, label=f"{tool_name}: Full CallToolResult (custom)")
                 
         except Exception as e:
             print(f"❌ Error calling tool: {str(e)}")
+
+    async def test_read_chunk(self):
+        """Test read_chunk tool: prompts for IDs and pretty-prints JSON."""
+        self.print_separator("Testing read_chunk Tool", "🔎")
+        try:
+            # Dataset ID prompt with optional listing
+            dataset_id = input("Enter dataset_id (press Enter to list): ").strip()
+            if not dataset_id:
+                print("\n📚 Listing datasets to help you choose...")
+                ds_resp = await self.session.call_tool("list_datasets", {})
+                if hasattr(ds_resp, 'content') and ds_resp.content:
+                    for c in ds_resp.content:
+                        if hasattr(c, 'text') and c.text:
+                            print(c.text)
+                dataset_id = input("\nEnter dataset_id (or 'q' to cancel): ").strip()
+                if not dataset_id or dataset_id.lower() == 'q':
+                    print("↩️  Cancelled. Returning to menu.")
+                    return
+
+            # Document ID prompt with optional listing
+            document_id = input("Enter document_id (press Enter to list): ").strip()
+            if not document_id:
+                print("\n📁 Listing documents in the dataset...")
+                docs_resp = await self.session.call_tool("list_documents", {"dataset_id": dataset_id, "page_size": 20})
+                if hasattr(docs_resp, 'content') and docs_resp.content:
+                    for c in docs_resp.content:
+                        if hasattr(c, 'text') and c.text:
+                            print(c.text)
+                document_id = input("\nEnter document_id (or 'q' to cancel): ").strip()
+                if not document_id or document_id.lower() == 'q':
+                    print("↩️  Cancelled. Returning to menu.")
+                    return
+
+            # Chunk selection with paging
+            page = 1
+            page_size = 20
+            selected_chunk_id = None
+            while True:
+                print(f"\n🧩 Fetching chunks (page {page})...")
+                chunks_resp = await self.session.call_tool(
+                    "list_chunks",
+                    {"dataset_id": dataset_id, "document_id": document_id, "page": page, "page_size": page_size}
+                )
+                chunks_json = None
+                if hasattr(chunks_resp, 'content') and chunks_resp.content and hasattr(chunks_resp.content[0], 'text'):
+                    try:
+                        chunks_json = json.loads(chunks_resp.content[0].text)
+                    except Exception:
+                        print("❌ Failed to parse chunks JSON. Raw:")
+                        print(chunks_resp.content[0].text)
+                        return
+                if not chunks_json:
+                    print("❌ No chunk data returned.")
+                    return
+                chunks = chunks_json.get("chunks", [])
+                total = chunks_json.get("total", 0)
+                if not chunks:
+                    print("⚠️  No chunks on this page.")
+                else:
+                    print("\nAvailable chunks:")
+                    for idx, ch in enumerate(chunks, 1):
+                        cid = ch.get("id") or ch.get("chunk_id")
+                        preview = (ch.get("content") or "").replace("\n", " ")
+                        preview = (preview[:200] + "...") if len(preview) > 200 else preview
+                        print(f"{idx}. {cid} — {preview}")
+                max_page = (total + page_size - 1) // page_size if page_size else 1
+                nav = input(f"\nSelect chunk number, 'n' next, 'p' prev, 'q' quit (page {page}/{max_page}): ").strip().lower()
+                if nav == 'q':
+                    print("↩️  Cancelled. Returning to menu.")
+                    return
+                if nav == 'n':
+                    if page < max_page:
+                        page += 1
+                    else:
+                        print("⚠️  Already at last page.")
+                    continue
+                if nav == 'p':
+                    if page > 1:
+                        page -= 1
+                    else:
+                        print("⚠️  Already at first page.")
+                    continue
+                try:
+                    sel = int(nav)
+                    if 1 <= sel <= len(chunks):
+                        selected_chunk_id = chunks[sel - 1].get("id") or chunks[sel - 1].get("chunk_id")
+                        break
+                    else:
+                        print("❌ Invalid selection.")
+                except ValueError:
+                    print("❌ Please enter a number, 'n', 'p', or 'q'.")
+
+            arguments = {"dataset_id": dataset_id, "document_id": document_id, "chunk_id": selected_chunk_id}
+            print(f"📤 Input Arguments: {self.format_tool_arguments(arguments)}")
+
+            start_time = datetime.now()
+            response = await self.session.call_tool("read_chunk", arguments)
+            end_time = datetime.now()
+
+            print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
+            if hasattr(response, 'content') and response.content:
+                for content in response.content:
+                    if hasattr(content, 'text') and content.text:
+                        self._print_text_as_pretty_json(content.text, label="read_chunk")
+                    else:
+                        print(content)
+            else:
+                print(f"📄 Raw Response: {response}")
+        except KeyboardInterrupt:
+            print("\n↩️  Cancelled. Returning to menu.")
+            return
+        except Exception as e:
+            print(f"❌ Error calling read_chunk: {str(e)}")
 
 
 async def main():

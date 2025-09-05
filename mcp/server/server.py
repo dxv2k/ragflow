@@ -118,9 +118,45 @@ class RAGFlowConnector:
             return res["data"]
         raise Exception([types.TextContent(type="text", text=res.get("message", "Failed to list documents"))])
 
+    def list_chunks(self, dataset_id: str, document_id: str, page: int = 1, page_size: int = 30, id: str | None = None, keywords: str | None = None):
+        params = {"page": page, "page_size": page_size}
+        if id:
+            params["id"] = id
+        if keywords:
+            params["keywords"] = keywords
+
+        res = self._get(f"/datasets/{dataset_id}/documents/{document_id}/chunks", params)
+        if not res:
+            raise Exception([types.TextContent(type="text", text="Cannot process this operation.")])
+
+        res = res.json()
+        if res.get("code") == 0:
+            data = res.get("data", {}) or {}
+            data.setdefault("total", 0)
+            data.setdefault("chunks", [])
+            data.setdefault("doc", {})
+            return data
+        raise Exception([types.TextContent(type="text", text=res.get("message", "Failed to list chunks"))])
+
+    def read_chunk(self, dataset_id: str, document_id: str, chunk_id: str):
+        params = {"id": chunk_id}
+        res = self._get(f"/datasets/{dataset_id}/documents/{document_id}/chunks", params)
+        if not res:
+            raise Exception([types.TextContent(type="text", text="Cannot process this operation.")])
+
+        res = res.json()
+        if res.get("code") == 0:
+            data = res.get("data", {}) or {}
+            # Normalize keys to ensure expected structure
+            data.setdefault("total", 0)
+            data.setdefault("chunks", [])
+            data.setdefault("doc", {})
+            return data
+        raise Exception([types.TextContent(type="text", text=res.get("message", "Failed to read chunk"))])
+
     def retrieval(
         self, dataset_ids, document_ids=None, question="", page=1, page_size=30, similarity_threshold=0.2, vector_similarity_weight=0.3, top_k=1024, rerank_id: str | None = None, keyword: bool = False
-    ):
+    ) -> dict:
         if document_ids is None:
             document_ids = []
         data_json = {
@@ -135,18 +171,21 @@ class RAGFlowConnector:
             "dataset_ids": dataset_ids,
             "document_ids": document_ids,
         }
-        # Send a POST request to the backend service (using requests library as an example, actual implementation may vary)
+        # Send a POST request to the backend service
         res = self._post("/retrieval", json=data_json)
         if not res:
             raise Exception([types.TextContent(type="text", text=res.get("Cannot process this operation."))])
 
         res = res.json()
         if res.get("code") == 0:
-            chunks = []
-            for chunk_data in res["data"].get("chunks"):
-                chunks.append(json.dumps(chunk_data, ensure_ascii=False))
-            return [types.TextContent(type="text", text="\n".join(chunks))]
-        raise Exception([types.TextContent(type="text", text=res.get("message"))])
+            data = res.get("data", {}) or {}
+            # Ensure keys exist
+            data.setdefault("chunks", [])
+            data.setdefault("doc_aggs", [])
+            data.setdefault("total", 0)
+            return data
+        # Bubble up backend message as TextContent
+        raise Exception([types.TextContent(type="text", text=res.get("message", "Retrieval failed"))])
 
 
 class RAGFlowCtx:
@@ -246,6 +285,34 @@ async def list_tools(*, connector) -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="read_chunk",
+            description="Read a single chunk by IDs and return its structured JSON (with document and dataset references).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_id": {"type": "string", "description": "Dataset ID (kb_id) that owns the document"},
+                    "document_id": {"type": "string", "description": "Document ID that owns the chunk"},
+                    "chunk_id": {"type": "string", "description": "Chunk ID to read"},
+                },
+                "required": ["dataset_id", "document_id", "chunk_id"],
+            },
+        ),
+        types.Tool(
+            name="list_chunks",
+            description="List chunks for a given document in a dataset. Returns JSON with total, chunks, and doc.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_id": {"type": "string", "description": "Dataset ID (kb_id)"},
+                    "document_id": {"type": "string", "description": "Document ID"},
+                    "page": {"type": "integer", "description": "Page number", "default": 1},
+                    "page_size": {"type": "integer", "description": "Items per page", "default": 20},
+                    "keywords": {"type": "string", "description": "Optional keyword filter"}
+                },
+                "required": ["dataset_id", "document_id"],
+            },
+        ),
+        types.Tool(
             name="list_datasets",
             description="List all available datasets with detailed information including names, descriptions, document counts, chunk counts, embedding models, and creation times. This provides a comprehensive overview of all knowledge bases available for querying.",
             inputSchema={
@@ -305,49 +372,62 @@ async def list_tools(*, connector) -> list[types.Tool]:
 
 
 def format_retrieval_response(chunks_data):
-    """Format retrieval response for better readability"""
+    """Format retrieval response for better readability.
+
+    Accepts a list of chunk dicts or JSON strings. Produces a human-friendly
+    summary including basic references when available.
+    """
     if not chunks_data or not isinstance(chunks_data, list):
         return [types.TextContent(type="text", text="No results found.")]
-    
-    formatted_content = []
-    structured_data = {"chunks": chunks_data, "total_results": len(chunks_data)}
-    
-    # Create a readable summary
+
     summary_parts = [f"📊 **Search Results: {len(chunks_data)} chunks found**\n"]
-    
+
     for i, chunk in enumerate(chunks_data, 1):
         try:
             chunk_obj = json.loads(chunk) if isinstance(chunk, str) else chunk
-            
-            # Extract key information
-            content = chunk_obj.get("content", "")[:200] + "..." if len(chunk_obj.get("content", "")) > 200 else chunk_obj.get("content", "")
-            highlight = chunk_obj.get("highlight", "")
-            doc_name = chunk_obj.get("document_keyword", "Unknown Document")
-            similarity = round(chunk_obj.get("similarity", 0) * 100, 1)
-            
+
+            text = chunk_obj.get("content", "") or ""
+            content = (text[:200] + "...") if len(text) > 200 else text
+            highlight = chunk_obj.get("highlight") or ""
+            doc_name = (
+                chunk_obj.get("document_keyword")
+                or chunk_obj.get("doc_name")
+                or "Unknown Document"
+            )
+            similarity = round(float(chunk_obj.get("similarity", 0)) * 100, 1)
+
+            # IDs for reference
+            chunk_id = chunk_obj.get("id")
+            doc_id = chunk_obj.get("document_id") or chunk_obj.get("doc_id")
+            kb_id = chunk_obj.get("kb_id")
+
             summary_parts.append(f"\n**Result {i}** ({similarity}% relevance)")
             summary_parts.append(f"📄 **Source:** {doc_name}")
-            
+
             if highlight:
                 summary_parts.append(f"🔍 **Key Information:** {highlight[:300]}...")
             else:
                 summary_parts.append(f"📝 **Content:** {content}")
-            
+
+            refs = []
+            if doc_id:
+                refs.append(f"doc_id={doc_id}")
+            if chunk_id:
+                refs.append(f"chunk_id={chunk_id}")
+            if kb_id:
+                refs.append(f"kb_id={kb_id}")
+            if refs:
+                summary_parts.append("🔗 " + ", ".join(refs))
+
             summary_parts.append("---")
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            # Fallback for malformed chunks
+        except (json.JSONDecodeError, KeyError, TypeError):
             summary_parts.append(f"\n**Result {i}** (Raw data)")
             summary_parts.append(str(chunk)[:200] + "...")
             summary_parts.append("---")
-    
+
     formatted_text = "\n".join(summary_parts)
-    
-    return [
-        types.TextContent(
-            type="text", 
-            text=formatted_text
-        )
-    ]
+
+    return [types.TextContent(type="text", text=formatted_text)]
 
 def format_datasets_response(datasets_str):
     """Format datasets response for better readability"""
@@ -424,6 +504,7 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
     if name == "knowledge_base_retrieval":
         document_ids = arguments.get("document_ids", [])
         dataset_ids = arguments.get("dataset_ids", [])
+        # Simplified output: always return a single JSON object
         
         # If no dataset_ids provided or empty list, get all available dataset IDs
         if not dataset_ids:
@@ -442,21 +523,97 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                             continue
         
         try:
-            raw_result = connector.retrieval(
+            data = connector.retrieval(
                 dataset_ids=dataset_ids,
                 document_ids=document_ids,
                 question=arguments["question"],
             )
-            
-            # Extract the text content from the result
-            if raw_result and isinstance(raw_result, list) and raw_result[0].type == "text":
-                chunks_text = raw_result[0].text
-                chunks_list = chunks_text.split('\n') if chunks_text else []
-                return format_retrieval_response(chunks_list)
-            
-            return raw_result
+
+            # Build formatted summary from chunks (pass dicts directly)
+            chunks_list = data.get("chunks", [])
+            formatted = format_retrieval_response(chunks_list)  # returns [TextContent]
+            summary_text = ""
+            try:
+                if formatted and isinstance(formatted[0], types.TextContent):
+                    summary_text = formatted[0].text or ""
+            except Exception:
+                summary_text = ""
+
+            payload = {
+                "request": {
+                    "dataset_ids": dataset_ids,
+                    "document_ids": document_ids,
+                    "question": arguments.get("question", ""),
+                },
+                "response": summary_text,
+                "chunks": data.get("chunks", []),
+                "documents": data.get("doc_aggs", []),
+                "total": data.get("total", 0),
+            }
+
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(payload, ensure_ascii=False, indent=2),
+                )
+            ]
         except Exception as e:
+            # Unwrap server-side content if exception carried it as args[0]
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
             return [types.TextContent(type="text", text=f"Error during retrieval: {str(e)}")]
+    
+    elif name == "read_chunk":
+        dataset_id = arguments.get("dataset_id")
+        document_id = arguments.get("document_id")
+        chunk_id = arguments.get("chunk_id")
+        if not all([dataset_id, document_id, chunk_id]):
+            return [types.TextContent(type="text", text="Error: dataset_id, document_id, and chunk_id are required.")]
+        try:
+            data = connector.read_chunk(dataset_id=dataset_id, document_id=document_id, chunk_id=chunk_id)
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(data, ensure_ascii=False, indent=2),
+                )
+            ]
+        except Exception as e:
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
+            return [types.TextContent(type="text", text=f"Error reading chunk: {str(e)}")]
+
+    elif name == "list_chunks":
+        dataset_id = arguments.get("dataset_id")
+        document_id = arguments.get("document_id")
+        if not all([dataset_id, document_id]):
+            return [types.TextContent(type="text", text="Error: dataset_id and document_id are required.")]
+        try:
+            data = connector.list_chunks(
+                dataset_id=dataset_id,
+                document_id=document_id,
+                page=arguments.get("page", 1),
+                page_size=arguments.get("page_size", 20),
+                keywords=arguments.get("keywords"),
+            )
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(data, ensure_ascii=False, indent=2),
+                )
+            ]
+        except Exception as e:
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
+            return [types.TextContent(type="text", text=f"Error listing chunks: {str(e)}")]
     
     elif name == "list_datasets":
         try:
