@@ -187,6 +187,36 @@ class RAGFlowConnector:
         # Bubble up backend message as TextContent
         raise Exception([types.TextContent(type="text", text=res.get("message", "Retrieval failed"))])
 
+    def iter_documents(self, dataset_id: str, page_size: int = 200):
+        """Yield all documents metadata in a dataset using pagination."""
+        page = 1
+        while True:
+            data = self.list_documents(dataset_id=dataset_id, page=page, page_size=page_size)
+            docs = data.get("docs", [])
+            if not docs:
+                break
+            for d in docs:
+                yield d
+            total = int(data.get("total", len(docs)))
+            if page * page_size >= total:
+                break
+            page += 1
+
+    def iter_chunks(self, dataset_id: str, document_id: str, page_size: int = 200):
+        """Yield all chunks for a document using pagination."""
+        page = 1
+        while True:
+            data = self.list_chunks(dataset_id=dataset_id, document_id=document_id, page=page, page_size=page_size)
+            chunks = data.get("chunks", [])
+            if not chunks:
+                break
+            for c in chunks:
+                yield c, data.get("doc", {})
+            total = int(data.get("total", len(chunks)))
+            if page * page_size >= total:
+                break
+            page += 1
+
 
 class RAGFlowCtx:
     def __init__(self, connector: RAGFlowConnector):
@@ -262,6 +292,26 @@ async def list_tools(*, connector) -> list[types.Tool]:
     dataset_description = connector.list_datasets()
 
     return [
+        types.Tool(
+            name="grep",
+            description=(
+                "Local full-text search (substring) over all chunks in a dataset. "
+                "Does NOT use semantic retrieval; purely scans chunk text and returns the best matches. "
+                "Provide a dataset_id and query. Optionally limit by document_ids. Top_k is capped at 10.\n\n"
+                "Available datasets (id, name, desc, counts):\n" + dataset_description
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_id": {"type": "string", "description": "Target dataset (knowledge base) ID"},
+                    "query": {"type": "string", "description": "Text to search (literal substring)"},
+                    "document_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional: restrict search to specific document IDs"},
+                    "case_sensitive": {"type": "boolean", "description": "Case sensitive matching (default false)", "default": False},
+                    "top_k": {"type": "integer", "description": "Max number of chunks to return (<=10)", "default": 10}
+                },
+                "required": ["dataset_id", "query"],
+            },
+        ),
         types.Tool(
             name="knowledge_base_retrieval",
             description="Retrieve relevant chunks from the RAGFlow retrieve interface based on the question. You can optionally specify dataset_ids to search only specific datasets, or omit dataset_ids entirely to search across ALL available datasets. You can also optionally specify document_ids to search within specific documents. When dataset_ids is not provided or is empty, the system will automatically search across all available datasets. Below is the list of all available datasets, including their descriptions and IDs:"
@@ -501,6 +551,130 @@ def format_documents_response(docs_data):
 @app.call_tool()
 @with_api_key(required=True)
 async def call_tool(name: str, arguments: dict, *, connector) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    if name == "grep":
+        dataset_id = arguments.get("dataset_id")
+        query = arguments.get("query")
+        case_sensitive = bool(arguments.get("case_sensitive", False))
+        document_ids = arguments.get("document_ids", []) or []
+        if not dataset_id or not query:
+            return [types.TextContent(type="text", text="Error: dataset_id and query are required.")]
+
+        try:
+            # Gather chunks across dataset (optionally restricted to documents)
+            target_docs = set(document_ids) if document_ids else None
+            all_matches = []
+
+            def norm(s: str) -> str:
+                return s if case_sensitive else s.lower()
+
+            qn = norm(query)
+
+            for doc in connector.iter_documents(dataset_id):
+                doc_id = doc.get("id")
+                if target_docs and doc_id not in target_docs:
+                    continue
+                doc_name = doc.get("name") or doc.get("document_keyword") or "Unknown Document"
+                for chunk, doc_meta in connector.iter_chunks(dataset_id, doc_id):
+                    # Extract text
+                    text = chunk.get("content") or chunk.get("text") or ""
+                    if not isinstance(text, str):
+                        try:
+                            text = json.dumps(text, ensure_ascii=False)
+                        except Exception:
+                            text = str(text)
+
+                    tn = norm(text)
+                    count = tn.count(qn) if qn else 0
+                    if count <= 0:
+                        continue
+
+                    first_idx = tn.find(qn)
+                    # Build a simple highlight snippet around first match
+                    start = max(0, first_idx - 80)
+                    end = min(len(text), first_idx + len(query) + 120)
+                    snippet = ("..." if start > 0 else "") + text[start:end].strip() + ("..." if end < len(text) else "")
+
+                    out = {
+                        **chunk,
+                        "document_id": chunk.get("document_id") or chunk.get("doc_id") or doc_id,
+                        "kb_id": chunk.get("kb_id") or dataset_id,
+                        "document_keyword": doc_name,
+                        "doc_name": doc_name,
+                        "highlight": snippet,
+                        "_match_count": count,
+                        "_first_pos": first_idx,
+                    }
+                    all_matches.append(out)
+
+            if not all_matches:
+                return [types.TextContent(type="text", text=json.dumps({
+                    "request": {"dataset_id": dataset_id, "document_ids": document_ids, "query": query, "mode": "fulltext-local"},
+                    "response": "No results found.",
+                    "chunks": [],
+                    "documents": [],
+                    "total": 0
+                }, ensure_ascii=False, indent=2))]
+
+            # Sort by match strength, then by earliest position, then shorter content
+            def sort_key(c):
+                content = c.get("content") or ""
+                clen = len(content) if isinstance(content, str) else 0
+                return (-int(c.get("_match_count", 0)), int(c.get("_first_pos", 0)), clen)
+
+            all_matches.sort(key=sort_key)
+
+            # Cap top_k to 10
+            try:
+                req_top_k = int(arguments.get("top_k", 10))
+            except Exception:
+                req_top_k = 10
+            top_k = max(1, min(10, req_top_k))
+
+            top_matches = all_matches[:top_k]
+
+            # Normalize similarity (0..1) based on match_count
+            max_count = max((m.get("_match_count", 0) for m in top_matches), default=1) or 1
+            for m in top_matches:
+                try:
+                    m["similarity"] = float(m.get("_match_count", 0)) / float(max_count)
+                except Exception:
+                    m["similarity"] = 0.0
+                # Remove internal keys
+                m.pop("_match_count", None)
+                m.pop("_first_pos", None)
+
+            formatted = format_retrieval_response(top_matches)
+            summary_text = ""
+            try:
+                if formatted and isinstance(formatted[0], types.TextContent):
+                    summary_text = formatted[0].text or ""
+            except Exception:
+                summary_text = ""
+
+            payload = {
+                "request": {
+                    "dataset_id": dataset_id,
+                    "document_ids": document_ids,
+                    "query": query,
+                    "case_sensitive": case_sensitive,
+                    "mode": "fulltext-local",
+                    "top_k": top_k,
+                },
+                "response": summary_text,
+                "chunks": top_matches,
+                "documents": [],
+                "total": len(all_matches),
+            }
+
+            return [types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        except Exception as e:
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
+            return [types.TextContent(type="text", text=f"Error during grep: {str(e)}")]
+
     if name == "knowledge_base_retrieval":
         document_ids = arguments.get("document_ids", [])
         dataset_ids = arguments.get("dataset_ids", [])

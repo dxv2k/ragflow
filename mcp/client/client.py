@@ -389,6 +389,10 @@ class RAGFlowMCPClient:
         dataset_ids = [test_dataset_id] if test_dataset_id else []
         await self.test_knowledge_base_retrieval(dataset_ids)
 
+        # Test 4: Grep (keyword-only) if we have a dataset
+        if test_dataset_id:
+            await self.test_grep(default_dataset_id=test_dataset_id)
+
     async def run_interactive_session(self):
         """Run interactive session for tool testing"""
         self.print_separator("Interactive Session", "🎮")
@@ -401,14 +405,15 @@ class RAGFlowMCPClient:
             print("2. 📚 Test list_datasets")
             print("3. 📁 Test list_documents")
             print("4. 🔍 Test knowledge_base_retrieval")
-            print("5. 🔎 Read chunk by ID")
-            print("6. 🛠️  Show available tools")
-            print("7. 🔄 Custom tool call")
-            print("8. ❌ Exit")
+            print("5. 🔎 Grep chunks (keyword)")
+            print("6. 📖 Read chunk by ID")
+            print("7. 🛠️  Show available tools")
+            print("8. 🔄 Custom tool call")
+            print("9. ❌ Exit")
             print("=" * 50)
             
             try:
-                choice = input("Enter your choice (1-7): ").strip()
+                choice = input("Enter your choice (1-9): ").strip()
                 
                 if choice == "1":
                     await self.run_comprehensive_tests()
@@ -429,20 +434,23 @@ class RAGFlowMCPClient:
                     await self.test_knowledge_base_retrieval(dataset_ids if dataset_ids else None, question if question else None)
                     
                 elif choice == "5":
-                    await self.test_read_chunk()
+                    await self.test_grep()
                     
                 elif choice == "6":
-                    await self.discover_tools()
+                    await self.test_read_chunk()
                     
                 elif choice == "7":
-                    await self.custom_tool_call()
+                    await self.discover_tools()
                     
                 elif choice == "8":
+                    await self.custom_tool_call()
+                    
+                elif choice == "9":
                     print("👋 Goodbye!")
                     break
                     
                 else:
-                    print("❌ Invalid choice. Please select 1-8.")
+                    print("❌ Invalid choice. Please select 1-9.")
                     
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
@@ -614,6 +622,77 @@ class RAGFlowMCPClient:
             return
         except Exception as e:
             print(f"❌ Error calling read_chunk: {str(e)}")
+
+    async def test_grep(self, default_dataset_id: Optional[str] = None):
+        """Test grep tool: prompts for dataset, query, optional document_ids, and prints JSON."""
+        self.print_separator("Testing grep Tool", "🧵")
+        try:
+            # Dataset selection
+            dataset_id = default_dataset_id or input("Enter dataset_id (press Enter to list): ").strip()
+            if not dataset_id:
+                print("\n📚 Listing datasets to help you choose...")
+                ds_resp = await self.session.call_tool("list_datasets", {})
+                if hasattr(ds_resp, 'content') and ds_resp.content:
+                    for c in ds_resp.content:
+                        if hasattr(c, 'text') and c.text:
+                            print(c.text)
+                dataset_id = input("\nEnter dataset_id (or 'q' to cancel): ").strip()
+                if not dataset_id or dataset_id.lower() == 'q':
+                    print("↩️  Cancelled. Returning to menu.")
+                    return
+
+            # Query prompt
+            query = input("Enter text to grep (required): ").strip()
+            if not query:
+                print("❌ Query is required for grep.")
+                return
+
+            # Optional document IDs
+            doc_ids_input = input("Restrict to document_ids? (comma-separated, optional): ").strip()
+            document_ids = [x.strip() for x in doc_ids_input.split(",") if x.strip()] if doc_ids_input else []
+
+            # Optional flags
+            case_in = input("Case sensitive? (y/N): ").strip().lower()
+            case_sensitive = case_in in ("y", "yes", "true", "1")
+            top_k_in = input("Top K (max 10, default 10): ").strip()
+            try:
+                top_k = int(top_k_in) if top_k_in else 10
+            except ValueError:
+                top_k = 10
+
+            arguments = {
+                "dataset_id": dataset_id,
+                "query": query,
+                "case_sensitive": case_sensitive,
+                "top_k": top_k,
+            }
+            if document_ids:
+                arguments["document_ids"] = document_ids
+
+            print(f"\n📤 Input Arguments: {self.format_tool_arguments(arguments)}")
+
+            start_time = datetime.now()
+            response = await self.session.call_tool("grep", arguments)
+            end_time = datetime.now()
+
+            print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
+            if hasattr(response, 'content') and response.content:
+                for content in response.content:
+                    if hasattr(content, 'text') and content.text:
+                        self._print_text_as_pretty_json(content.text, label="grep")
+                    else:
+                        print(content)
+            else:
+                print(f"📄 Raw Response: {response}")
+
+            # Full response for verification
+            self._print_full_calltool_result(response, label="grep: Full CallToolResult")
+
+        except KeyboardInterrupt:
+            print("\n↩️  Cancelled. Returning to menu.")
+            return
+        except Exception as e:
+            print(f"❌ Error calling grep: {str(e)}")
 
 
 async def main():
