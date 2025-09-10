@@ -34,6 +34,7 @@ services:
       # Expose HTTPS only if you configure TLS in nginx (443)
       - 9382:9382 # entry for MCP (host_port:docker_port). The docker_port must match the value you set for `mcp-port` above.
     volumes:
+      - ../whisperx_backend:/ragflow/whisperx_backend
       - ./ragflow-logs:/ragflow/logs
       - ./nginx/ragflow.conf:/etc/nginx/conf.d/ragflow.conf
       - ./nginx/proxy.conf:/etc/nginx/proxy.conf
