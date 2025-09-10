@@ -6,7 +6,6 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
-import logging
 
 import librosa
 import numpy as np
@@ -17,10 +16,9 @@ from pyannote.audio import Pipeline
 
 from .models import ProcessingConfig, TranscriptionResult, TranscriptionSegment, ProcessingStatus
 from .utils import FileManager, CacheManager
+from .logger import get_whisperx_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_whisperx_logger(__name__)
 
 
 class AudioProcessor:
@@ -161,7 +159,7 @@ class TranscriptionEngine:
                     logger.info("⚠️  No HF token provided - using public access (may fail for private models)")
                 
                 # Final debug: log the exact token being passed to pyannote
-                logger.info(f"🔍 load_diarization_model: About to call Pipeline.from_pretrained with use_auth_token='{hf_token}'")
+                logger.info(f"🔍 load_diarization_model: About to call Pipeline.from_pretrained with use_auth_token='{hf_token[:20]}'")
                 
                 diarize_model = Pipeline.from_pretrained(
                     "pyannote/speaker-diarization-3.1",

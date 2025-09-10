@@ -1,15 +1,15 @@
 """High-level API for the transcription backend."""
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from .models import ProcessingConfig, TranscriptionResult
 from .core import ProcessingOrchestrator
 from .utils import FileManager, CacheManager
+from .logger import get_whisperx_logger
 
-logger = logging.getLogger(__name__)
+logger = get_whisperx_logger(__name__)
 
 
 class TranscriptionAPI:

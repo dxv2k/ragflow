@@ -6,13 +6,13 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-import logging
 import gc
 import torch
 
 from .models import TranscriptionResult, TranscriptionSegment
+from .logger import get_whisperx_logger
 
-logger = logging.getLogger(__name__)
+logger = get_whisperx_logger(__name__)
 
 
 class FileManager:

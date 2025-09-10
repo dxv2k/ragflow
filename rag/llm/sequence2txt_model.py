@@ -20,10 +20,10 @@ import io
 from abc import ABC
 from openai import OpenAI
 import json
-from rag.utils import num_tokens_from_string
 import base64
 import re
 import logging
+from rag.utils import num_tokens_from_string
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +197,21 @@ class WhisperXSeq2txt(Base):
                 # Add the voice transcription backend to Python path
                 ragflow_root = Path(__file__).parent.parent.parent
                 backend_path = ragflow_root / "whisperx_backend"
-                if backend_path.exists():
+                
+                # Check if backend path exists and add to Python path
+                if not backend_path.exists():
+                    raise ImportError(
+                        f"WhisperX backend directory not found at: {backend_path}. "
+                        "Please ensure the WhisperX pipeline is properly installed and "
+                        "the 'whisperx_backend' directory exists in the RAGFlow root directory."
+                    )
+                
+                # Add to Python path if not already there
+                if str(ragflow_root) not in sys.path:
                     sys.path.insert(0, str(ragflow_root))
-                    from whisperx_backend import TranscriptionAPI
+                
+                # Import TranscriptionAPI after ensuring the backend path exists
+                from whisperx_backend import TranscriptionAPI
                 
                 # Extract HF token from config_options if available
                 hf_token = self.config_options.get('key') if hasattr(self, 'config_options') else None
@@ -214,12 +226,17 @@ class WhisperXSeq2txt(Base):
                 # Initialize with HF token for pyannote authentication
                 logger.info(f"🔍 _get_whisperx_api: Initializing TranscriptionAPI with hf_token")
                 self._whisperx_api = TranscriptionAPI(hf_token=hf_token)
+                
             except ImportError as e:
                 raise ImportError(
                     "WhisperX backend not available. Please ensure the WhisperX pipeline "
                     "is properly installed. The backend should be accessible via "
                     "the 'whisperx_backend' directory in the RAGFlow root directory. "
                     f"Error: {e}"
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to initialize WhisperX TranscriptionAPI: {e}"
                 )
         return self._whisperx_api
     
