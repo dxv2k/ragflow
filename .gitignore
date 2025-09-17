@@ -49,3 +49,4 @@ docker/data
 ragflow.egg*
 .cursor/
 zDocs/
+.env

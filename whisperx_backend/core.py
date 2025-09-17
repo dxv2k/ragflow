@@ -231,7 +231,7 @@ class TranscriptionEngine:
         
         device_info = config.get_device_allocation_summary()
         logger.info(f"🔧 Device allocation: {device_info}")
-        
+        config.language = "auto"
         start_time = time.time()
         result = {"segments": [], "language": config.language}
         

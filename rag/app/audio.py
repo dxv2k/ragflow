@@ -15,14 +15,25 @@
 #
 
 import re
+import os
 
 from api.db import LLMType
 from rag.nlp import rag_tokenizer
 from api.db.services.llm_service import LLMBundle
 from rag.nlp import tokenize
-
+from rag.app.video import chunk as video_chunk
 
 def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
+    # Check if this is a video file
+    file_ext = os.path.splitext(filename)[1].lower()
+    video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.mpeg', '.mpg']
+    
+    if file_ext in video_extensions:
+        # Route to video processor
+        callback(0.05, f"Detected video file ({file_ext}), routing to video processor...")
+        return video_chunk(filename, binary, tenant_id, lang, callback, **kwargs)
+    
+    # Process as audio file
     doc = {
         "docnm_kwd": filename,
         "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))

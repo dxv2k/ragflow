@@ -150,7 +150,7 @@ class WhisperXSeq2txt(Base):
         logger.info(f"🔍 WhisperXSeq2txt.__init__: kwargs keys={list(kwargs.keys())}")
         
         # Set the internal model name for WhisperX (can be overridden)
-        self.whisperx_model = kwargs.get('whisperx_model', 'large-v3')
+        self.whisperx_model = kwargs.get('whisperx_model', 'large-v2')
         self.model_name = model_name
         
         # Parse configuration from key if it's a JSON string (from RAGFlow UI)
@@ -185,6 +185,8 @@ class WhisperXSeq2txt(Base):
         
         # Initialize WhisperX API (lazy loading)
         self._whisperx_api = None
+        # Store last detailed result for downstream consumers (segments/language)
+        self._last_result = None
     
     def _get_whisperx_api(self):
         """Lazy initialization of WhisperX API."""
@@ -371,6 +373,8 @@ class WhisperXSeq2txt(Base):
                 
                 # Transcribe using WhisperX
                 result = whisperx_api.transcribe_file(temp_file_path, **transcription_config)
+                # Cache for later access
+                self._last_result = result
                 
                 # Extract text from WhisperX result
                 if result and result.segments:
@@ -398,6 +402,26 @@ class WhisperXSeq2txt(Base):
         except Exception as e:
             error_msg = f"**ERROR**: WhisperX transcription failed: {str(e)}"
             return error_msg, 0
+
+    # New accessors for downstream consumers (e.g., video frame sampling)
+    def get_segments(self):
+        """Return last transcription segments as list of dicts with start/end/text and optional speaker/words."""
+        res = self._last_result
+        if not res or not getattr(res, "segments", None):
+            return []
+        segments = []
+        for seg in res.segments:
+            try:
+                segments.append({
+                    "start": getattr(seg, "start", None) if not isinstance(seg, dict) else seg.get("start"),
+                    "end": getattr(seg, "end", None) if not isinstance(seg, dict) else seg.get("end"),
+                    "text": getattr(seg, "text", "").strip() if not isinstance(seg, dict) else (seg.get("text", "").strip()),
+                    "speaker": getattr(seg, "speaker", None) if not isinstance(seg, dict) else seg.get("speaker"),
+                    "words": getattr(seg, "words", None) if not isinstance(seg, dict) else seg.get("words"),
+                })
+            except Exception:
+                continue
+        return segments
 
 
 class TencentCloudSeq2txt(Base):
