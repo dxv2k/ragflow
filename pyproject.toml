@@ -82,7 +82,7 @@ dependencies = [
     "ranx==0.3.20",
     "readability-lxml==0.8.1",
     "valkey==6.0.2",
-    "requests==2.32.2",
+    "requests>=2.26.0,<2.32.3",
     "replicate==0.31.0",
     "roman-numbers==1.0.2",
     "ruamel-base==1.0.0",
@@ -250,6 +250,7 @@ dependencies = [
     "yarl==1.20.1",
     "librosa==0.11.0",
     "huggingface_hub[cli]==0.34.0",
+    "dill>=0.3.0,<0.3.8",
 ]
 
 [project.optional-dependencies]
@@ -259,7 +260,7 @@ full = [
     "fastembed-gpu>=0.3.6,<0.4.0; sys_platform != 'darwin' and platform_machine == 'x86_64'",
     "flagembedding==1.2.10",
     "torch>=2.5.0,<3.0.0",
-    "transformers>=4.35.0,<5.0.0"
+    "transformers>=4.35.0,<4.37.0"
 ]
 
 [tool.setuptools]
