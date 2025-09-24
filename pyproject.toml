@@ -249,6 +249,7 @@ dependencies = [
     "whisperx==3.2.0",
     "yarl==1.20.1",
     "librosa==0.11.0",
+    "huggingface_hub[cli]==0.34.0",
 ]
 
 [project.optional-dependencies]

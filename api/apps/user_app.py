@@ -619,18 +619,22 @@ def user_register(user_id, user):
         "location": "",
     }
     tenant_llm = []
-    for llm in LLMService.query(fid=settings.LLM_FACTORY):
-        tenant_llm.append(
-            {
-                "tenant_id": user_id,
-                "llm_factory": settings.LLM_FACTORY,
-                "llm_name": llm.llm_name,
-                "model_type": llm.model_type,
-                "api_key": settings.API_KEY,
-                "api_base": settings.LLM_BASE_URL,
-                "max_tokens": llm.max_tokens if llm.max_tokens else 8192,
-            }
-        )
+    # Support multiple LLM factories
+    factories_to_process = settings.LLM_FACTORIES if settings.LLM_FACTORIES else [settings.LLM_FACTORY] if settings.LLM_FACTORY else []
+    
+    for factory in factories_to_process:
+        for llm in LLMService.query(fid=factory):
+            tenant_llm.append(
+                {
+                    "tenant_id": user_id,
+                    "llm_factory": factory,
+                    "llm_name": llm.llm_name,
+                    "model_type": llm.model_type,
+                    "api_key": settings.API_KEY,
+                    "api_base": settings.LLM_BASE_URL,
+                    "max_tokens": llm.max_tokens if llm.max_tokens else 8192,
+                }
+            )
     if settings.LIGHTEN != 1:
         for buildin_embedding_model in settings.BUILTIN_EMBEDDING_MODELS:
             mdlnm, fid = TenantLLMService.split_model_name_and_factory(buildin_embedding_model)

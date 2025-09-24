@@ -17,6 +17,8 @@ services:
     build:
       context: ../
       dockerfile: Dockerfile.monkeyocr
+      args:
+        HF_TOKEN: ${HF_TOKEN} 
     platform: linux/amd64
     # Example configuration to set up an MCP server:
     command:
@@ -50,6 +52,7 @@ services:
     environment:
       - TZ=${TIMEZONE}
       - HF_ENDPOINT=${HF_ENDPOINT}
+      - HF_HOME=/ragflow/models
       - MACOS=${MACOS}
       # MonkeyOCR specific environment variables
       - MONKEYOCR_API_URL=${MONKEYOCR_API_URL}
@@ -68,13 +71,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # GPU configuration (from docker-compose-gpu.yml pattern)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
 
 # MonkeyOCR specific volumes
 volumes:

@@ -64,11 +64,15 @@ def init_superuser():
         "role": UserTenantRole.OWNER
     }
     tenant_llm = []
-    for llm in LLMService.query(fid=settings.LLM_FACTORY):
-        tenant_llm.append(
-            {"tenant_id": user_info["id"], "llm_factory": settings.LLM_FACTORY, "llm_name": llm.llm_name,
-             "model_type": llm.model_type,
-             "api_key": settings.API_KEY, "api_base": settings.LLM_BASE_URL})
+    # Support multiple LLM factories
+    factories_to_process = settings.LLM_FACTORIES if settings.LLM_FACTORIES else [settings.LLM_FACTORY] if settings.LLM_FACTORY else []
+    
+    for factory in factories_to_process:
+        for llm in LLMService.query(fid=factory):
+            tenant_llm.append(
+                {"tenant_id": user_info["id"], "llm_factory": factory, "llm_name": llm.llm_name,
+                 "model_type": llm.model_type,
+                 "api_key": settings.API_KEY, "api_base": settings.LLM_BASE_URL})
 
     if not UserService.save(**user_info):
         logging.error("can't init admin.")

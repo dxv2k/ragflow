@@ -133,6 +133,7 @@ WORKDIR /ragflow
 
 # Install dependencies from uv.lock file (SAME AS OFFICIAL)
 COPY pyproject.toml uv.lock ./
+ENV UV_HTTP_TIMEOUT=120
 RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
     if [ "$NEED_MIRROR" == "1" ]; then \
         sed -i 's|pypi.org|mirrors.aliyun.com/pypi|g' uv.lock; \
@@ -144,6 +145,16 @@ RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
     else \
         uv sync --python 3.10 --all-extras; \
     fi
+
+# Build ARG (not persisted in image)
+ARG HF_TOKEN
+ENV HF_TOKEN=$HF_TOKEN
+ENV HF_HOME=/ragflow/models
+
+# # Download model with token
+RUN uv run huggingface-cli download pyannote/speaker-diarization-3.1 \
+    --token $HF_TOKEN \
+    --local-dir /ragflow/models/diarization
 
 # Build web frontend (SAME AS OFFICIAL)
 COPY web web
@@ -188,6 +199,9 @@ COPY monkeyocr monkeyocr
 # Copy the virtual environment from the builder stage
 COPY --from=builder /ragflow/.venv /ragflow/.venv
 
+# Copy huggingface models
+COPY --from=builder /ragflow/models /ragflow/models
+
 # Set up the environment to use the copied virtual environment
 ENV VIRTUAL_ENV=/ragflow/.venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
@@ -201,7 +215,7 @@ ENV MODELSCOPE_CACHE=/ragflow/monkeyocr/model_weight
 RUN /ragflow/.venv/bin/python -m ensurepip --upgrade
 
 # Now that pip is installed in the venv, install MonkeyOCR dependencies
-RUN /ragflow/.venv/bin/python -m pip install huggingface_hub && \
+RUN /ragflow/.venv/bin/python -m pip install --no-deps huggingface_hub && \
     cd /ragflow/monkeyocr && \
     /ragflow/.venv/bin/python -m pip install -e .
 # Create MonkeyOCR directories
@@ -221,16 +235,18 @@ RUN if [ -d "/ragflow/monkeyocr/model_weight" ] && [ "$(ls -A /ragflow/monkeyocr
 
 WORKDIR /ragflow
 
+# Copy compiled web pages (SAME AS OFFICIAL)
+COPY --from=builder /ragflow/web/dist /ragflow/web/dist
+
+# Copy version info (SAME AS OFFICIAL)
+COPY --from=builder /ragflow/VERSION /ragflow/VERSION
+
 # ========== FINALIZE (SAME AS OFFICIAL) ==========
 COPY docker/service_conf.yaml.template ./conf/service_conf.yaml.template
 COPY docker/entrypoint.sh ./
 RUN chmod +x ./entrypoint*.sh
 RUN mkdir -p /ragflow/logs
 
-# Copy compiled web pages (SAME AS OFFICIAL)
-COPY --from=builder /ragflow/web/dist /ragflow/web/dist
-
-# Copy version info (SAME AS OFFICIAL)
-COPY --from=builder /ragflow/VERSION /ragflow/VERSION
+RUN echo "Build completed ✅"
 
 ENTRYPOINT ["./entrypoint.sh"]
