@@ -162,10 +162,8 @@ class TranscriptionEngine:
                 # Final debug: log the exact token being passed to pyannote
                 logger.info(f"🔍 load_diarization_model: About to call Pipeline.from_pretrained with use_auth_token='{hf_token[:20]}'")
                 
-                diarize_model = Pipeline.from_pretrained(
-                    "pyannote/speaker-diarization-3.1",
-                    use_auth_token=hf_token  # Use provided HF token instead of None
-                )
+
+                diarize_model = Pipeline.from_pretrained("./models/config.yaml")
                 # Convert "auto" to actual device
                 actual_device = "cuda" if device == "auto" and torch.cuda.is_available() else "cpu" if device == "auto" else device
                 logger.info(f"🎯 Moving diarization model to {actual_device}")
@@ -182,10 +180,7 @@ class TranscriptionEngine:
                     logger.error("💥 CUDA out of memory loading diarization model. Falling back to CPU.")
                     logger.info("🔄 Retrying diarization model load on CPU...")
                     # Fallback to CPU
-                    diarize_model = Pipeline.from_pretrained(
-                        "pyannote/speaker-diarization-3.1",
-                        use_auth_token=hf_token  # Use provided HF token instead of None
-                    )
+                    diarize_model = Pipeline.from_pretrained("./models/config.yaml")
                     diarize_model.to(torch.device("cpu"))
                     self._models[cache_key] = diarize_model
                     load_time = time.time() - start_time
@@ -352,8 +347,7 @@ class TranscriptionEngine:
                     'end': segment.end,
                     'speaker': format_speaker_label(label)
                 } for segment, _, label in diarize_segments.itertracks(yield_label=True)])
-                
-                logger.info(f"👥 Found {len(diarize_df)} diarization segments")
+                     
                 unique_speakers = diarize_df['speaker'].unique()
                 logger.info(f"👥 Detected speakers: {list(unique_speakers)}")
                 
