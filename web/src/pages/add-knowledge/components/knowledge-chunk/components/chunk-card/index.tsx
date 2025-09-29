@@ -232,7 +232,7 @@ function renderContent(item: IChunk, textMode: ChunkTextMode) {
               {/* Timestamp Header */}
               {hasTimestamp && (
                 <div className="text-sm font-semibold text-gray-700 bg-gray-100 px-3 py-2 rounded-md border">
-                  📅 Timestamp{index}: {formatTimestamp(segment.start!)} -{' '}
+                  Timestamp {index + 1}: {formatTimestamp(segment.start!)} -{' '}
                   {formatTimestamp(segment.end!)}
                 </div>
               )}
