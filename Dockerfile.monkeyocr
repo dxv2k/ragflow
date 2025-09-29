@@ -133,7 +133,7 @@ WORKDIR /ragflow
 
 # Install dependencies from uv.lock file (SAME AS OFFICIAL)
 COPY pyproject.toml uv.lock ./
-ENV UV_HTTP_TIMEOUT=120
+ENV UV_HTTP_TIMEOUT=1800
 RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
     if [ "$NEED_MIRROR" == "1" ]; then \
         sed -i 's|pypi.org|mirrors.aliyun.com/pypi|g' uv.lock; \
@@ -145,16 +145,6 @@ RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
     else \
         uv sync --python 3.10 --all-extras; \
     fi
-
-# Build ARG (not persisted in image)
-ARG HF_TOKEN
-ENV HF_TOKEN=$HF_TOKEN
-ENV HF_HOME=/ragflow/models
-
-# # Download model with token
-RUN uv run huggingface-cli download pyannote/speaker-diarization-3.1 \
-    --token $HF_TOKEN \
-    --local-dir /ragflow/models/diarization
 
 # Build web frontend (SAME AS OFFICIAL)
 COPY web web
@@ -198,9 +188,6 @@ COPY monkeyocr monkeyocr
 
 # Copy the virtual environment from the builder stage
 COPY --from=builder /ragflow/.venv /ragflow/.venv
-
-# Copy huggingface models
-COPY --from=builder /ragflow/models /ragflow/models
 
 # Set up the environment to use the copied virtual environment
 ENV VIRTUAL_ENV=/ragflow/.venv

@@ -17,8 +17,6 @@ services:
     build:
       context: ../
       dockerfile: Dockerfile.monkeyocr
-      args:
-        HF_TOKEN: ${HF_TOKEN} 
     platform: linux/amd64
     # Example configuration to set up an MCP server:
     command:
@@ -36,6 +34,8 @@ services:
       # Expose HTTPS only if you configure TLS in nginx (443)
       - 9382:9382 # entry for MCP (host_port:docker_port). The docker_port must match the value you set for `mcp-port` above.
     volumes:
+      - ../api:/ragflow/api
+      - ../models:/ragflow/models
       - ../whisperx_backend:/ragflow/whisperx_backend
       - ./ragflow-logs:/ragflow/logs
       - ./nginx/ragflow.conf:/etc/nginx/conf.d/ragflow.conf
@@ -52,7 +52,6 @@ services:
     environment:
       - TZ=${TIMEZONE}
       - HF_ENDPOINT=${HF_ENDPOINT}
-      - HF_HOME=/ragflow/models
       - MACOS=${MACOS}
       # MonkeyOCR specific environment variables
       - MONKEYOCR_API_URL=${MONKEYOCR_API_URL}
