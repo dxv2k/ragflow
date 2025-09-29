@@ -23,6 +23,8 @@ interface IProps {
 interface SpeakerSegment {
   speaker: string;
   text: string;
+  start?: number;
+  end?: number;
 }
 
 // Speaker color classes for different speakers
@@ -37,6 +39,12 @@ const speakerColors = [
   'text-pink-600 bg-pink-50 border-pink-200',
 ];
 
+function formatTimestamp(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = (seconds % 60).toFixed(1);
+  return `${minutes}:${remainingSeconds.padStart(4, '0')}`;
+}
+
 function parseSpeakerText(content: string): SpeakerSegment[] {
   console.log(
     '🔍 [Speaker Parser] Input content:',
@@ -49,6 +57,61 @@ function parseSpeakerText(content: string): SpeakerSegment[] {
     '🧹 [Speaker Parser] Clean content (no HTML):',
     cleanContent.substring(0, 200) + '...',
   );
+
+  // Try to parse as JSON first (new WhisperX structure)
+  try {
+    const jsonData = JSON.parse(cleanContent);
+
+    if (jsonData.segments && Array.isArray(jsonData.segments)) {
+      console.log(
+        '🎯 [Speaker Parser] Found new WhisperX JSON structure with segments',
+      );
+
+      const individualSegments: SpeakerSegment[] = [];
+
+      for (const segment of jsonData.segments) {
+        const speaker = segment.speaker || 'UNKNOWN';
+        const text = segment.text?.trim() || '';
+        const start = segment.start;
+        const end = segment.end;
+
+        if (text) {
+          // Add each segment individually (no consolidation)
+          individualSegments.push({
+            speaker: speaker,
+            text: text,
+            start: start,
+            end: end,
+          });
+          console.log(
+            `➕ [Speaker Parser] Added individual ${speaker} segment (${formatTimestamp(start)} - ${formatTimestamp(end)})`,
+          );
+        }
+      }
+
+      console.log(
+        `🎯 [Speaker Parser] Total individual segments: ${individualSegments.length}`,
+      );
+      individualSegments.forEach((seg, idx) => {
+        const timeRange =
+          seg.start !== undefined && seg.end !== undefined
+            ? ` [${formatTimestamp(seg.start)} - ${formatTimestamp(seg.end)}]`
+            : '';
+        console.log(
+          `   ${idx + 1}. ${seg.speaker}${timeRange}: "${seg.text.substring(0, 50)}${seg.text.length > 50 ? '...' : ''}"`,
+        );
+      });
+
+      return individualSegments;
+    }
+  } catch (error) {
+    console.log(
+      '📝 [Speaker Parser] Not JSON or invalid structure, falling back to regex parsing',
+    );
+  }
+
+  // Fallback to old regex parsing for backward compatibility
+  console.log('🔄 [Speaker Parser] Using legacy regex parsing');
 
   // Match [SPEAKER_XX] pattern followed by text
   const speakerRegex = /\[SPEAKER_(\d+)\]\s*([^[]*?)(?=\[SPEAKER_\d+\]|$)/g;
@@ -153,26 +216,39 @@ function renderContent(item: IChunk, textMode: ChunkTextMode) {
         [styles.contentEllipsis]: textMode === ChunkTextMode.Ellipse,
       })}
     >
-      <div className="space-y-3">
+      <div className="space-y-4">
         {segments.map((segment, index) => {
           const speakerNum = parseInt(segment.speaker.split('_')[1] || '0');
           const colorClass = speakerColors[speakerNum % speakerColors.length];
+          const hasTimestamp =
+            segment.start !== undefined && segment.end !== undefined;
 
           console.log(
-            `🎨 [Render Content] Rendering segment ${index + 1}: Speaker ${speakerNum + 1} with color ${colorClass}`,
+            `🎨 [Render Content] Rendering segment ${index + 1}: ${segment.speaker} with color ${colorClass}${hasTimestamp ? ` [${formatTimestamp(segment.start!)} - ${formatTimestamp(segment.end!)}]` : ''}`,
           );
 
           return (
             <div key={index} className="space-y-2">
-              {/* Speaker Badge */}
-              <div
-                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${colorClass}`}
-              >
-                🎤 Speaker {speakerNum + 1}
-              </div>
-              {/* Speaker Text */}
-              <div className="text-gray-800 text-sm leading-relaxed pl-4 border-l-3 border-gray-300 bg-gray-50 p-3 rounded-r-lg shadow-sm">
-                {segment.text}
+              {/* Timestamp Header */}
+              {hasTimestamp && (
+                <div className="text-sm font-semibold text-gray-700 bg-gray-100 px-3 py-2 rounded-md border">
+                  📅 Timestamp{index}: {formatTimestamp(segment.start!)} -{' '}
+                  {formatTimestamp(segment.end!)}
+                </div>
+              )}
+
+              {/* Speaker and Text with indentation */}
+              <div className="ml-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${colorClass}`}
+                  >
+                    🎤 {segment.speaker.replace('SPEAKER_', 'Speaker ')}
+                  </div>
+                </div>
+                <div className="text-gray-800 text-sm leading-relaxed pl-4 border-l-3 border-gray-300 bg-gray-50 p-3 rounded-r-lg shadow-sm">
+                  {segment.text}
+                </div>
               </div>
             </div>
           );
