@@ -17,6 +17,7 @@ import json
 import os.path
 import pathlib
 import re
+from datetime import timedelta
 
 import flask
 from flask import request
@@ -434,6 +435,22 @@ def get(doc_id):
             else:
                 response.headers.set("Content-Type", "application/%s" % ext.group(1))
         return response
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route("/geturl/<doc_id>", methods=["GET"])  # noqa: F821
+# @login_required
+def geturl(doc_id):
+    try:
+        e, doc = DocumentService.get_by_id(doc_id)
+        if not e:
+            return get_data_error_result(message="Document not found!")
+
+        b, n = File2DocumentService.get_storage_address(doc_id=doc_id)
+        expires = timedelta(days=7)
+        presigned_url = STORAGE_IMPL.get_presigned_url(b, n, expires)
+        return get_json_result(data=presigned_url)
     except Exception as e:
         return server_error_response(e)
 
