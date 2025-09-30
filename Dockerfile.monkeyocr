@@ -153,6 +153,7 @@ RUN --mount=type=cache,id=ragflow_npm,target=/root/.npm,sharing=locked \
     cd web && npm install && npm run build
 
 # Version information (SAME AS OFFICIAL)
+ENV NODE_OPTIONS="--max-old-space-size=16384"
 COPY .git /ragflow/.git
 RUN version_info=$(git describe --tags --match=v* --first-parent --always); \
     if [ "$LIGHTEN" == "1" ]; then \
