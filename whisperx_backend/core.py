@@ -348,6 +348,8 @@ class TranscriptionEngine:
                     'speaker': format_speaker_label(label)
                 } for segment, _, label in diarize_segments.itertracks(yield_label=True)])
                      
+                
+                logger.info(f"👥 Found {len(diarize_df)} diarization segments")
                 unique_speakers = diarize_df['speaker'].unique()
                 logger.info(f"👥 Detected speakers: {list(unique_speakers)}")
                 
