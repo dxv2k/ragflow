@@ -40,7 +40,7 @@ def get_urls(use_china_mirrors=False):
 
 repos = [
     "InfiniFlow/text_concat_xgb_v1.0",
-    "InfiniFlow/deepdoc",
+    "TrungTin0105/deepdoc-doclayout-paddlev5",
     "InfiniFlow/huqie",
     "BAAI/bge-large-zh-v1.5",
     "maidalun1020/bce-embedding-base_v1",
