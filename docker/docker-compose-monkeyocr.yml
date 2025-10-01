@@ -34,6 +34,8 @@ services:
       # Expose HTTPS only if you configure TLS in nginx (443)
       - 9382:9382 # entry for MCP (host_port:docker_port). The docker_port must match the value you set for `mcp-port` above.
     volumes:
+      - ../api:/ragflow/api
+      - ../models:/ragflow/models
       - ../whisperx_backend:/ragflow/whisperx_backend
       - ./ragflow-logs:/ragflow/logs
       - ./nginx/ragflow.conf:/etc/nginx/conf.d/ragflow.conf
@@ -68,13 +70,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # GPU configuration (from docker-compose-gpu.yml pattern)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
 
 # MonkeyOCR specific volumes
 volumes:

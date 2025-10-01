@@ -13,6 +13,7 @@ import openai
 import torch
 import whisperx
 from pyannote.audio import Pipeline
+from openai import OpenAI
 
 from .models import ProcessingConfig, TranscriptionResult, TranscriptionSegment, ProcessingStatus
 from .utils import FileManager, CacheManager
@@ -161,10 +162,8 @@ class TranscriptionEngine:
                 # Final debug: log the exact token being passed to pyannote
                 logger.info(f"🔍 load_diarization_model: About to call Pipeline.from_pretrained with use_auth_token='{hf_token[:20]}'")
                 
-                diarize_model = Pipeline.from_pretrained(
-                    "pyannote/speaker-diarization-3.1",
-                    use_auth_token=hf_token  # Use provided HF token instead of None
-                )
+
+                diarize_model = Pipeline.from_pretrained("./models/config.yaml")
                 # Convert "auto" to actual device
                 actual_device = "cuda" if device == "auto" and torch.cuda.is_available() else "cpu" if device == "auto" else device
                 logger.info(f"🎯 Moving diarization model to {actual_device}")
@@ -181,10 +180,7 @@ class TranscriptionEngine:
                     logger.error("💥 CUDA out of memory loading diarization model. Falling back to CPU.")
                     logger.info("🔄 Retrying diarization model load on CPU...")
                     # Fallback to CPU
-                    diarize_model = Pipeline.from_pretrained(
-                        "pyannote/speaker-diarization-3.1",
-                        use_auth_token=hf_token  # Use provided HF token instead of None
-                    )
+                    diarize_model = Pipeline.from_pretrained("./models/config.yaml")
                     diarize_model.to(torch.device("cpu"))
                     self._models[cache_key] = diarize_model
                     load_time = time.time() - start_time
@@ -232,6 +228,9 @@ class TranscriptionEngine:
         device_info = config.get_device_allocation_summary()
         logger.info(f"🔧 Device allocation: {device_info}")
         
+        config.language = "auto"
+        logger.info(f"🌐 Intial config language: {config.language}")
+        
         start_time = time.time()
         result = {"segments": [], "language": config.language}
         
@@ -270,8 +269,10 @@ class TranscriptionEngine:
                 language=actual_language
             )
             
+            detected_language = whisper_result.get("language", config.language)
             transcription_time = time.time() - transcription_start
             logger.info(f"✅ Transcription completed in {transcription_time:.2f}s")
+            logger.info(f"🌐 Detected language: {detected_language}")
             
             result.update(whisper_result)
             
@@ -280,8 +281,8 @@ class TranscriptionEngine:
                 logger.info(f"⏱️ Aligning timestamps on {config.alignment_device}...")
                 align_start = time.time()
                 
-                model_a, metadata = whisperx.load_align_model(
-                    language_code=result["language"], 
+                model_a, metadata = self.load_alignment_model(
+                    language_code=detected_language,
                     device=config.alignment_device
                 )
                 result = whisperx.align(
@@ -346,6 +347,7 @@ class TranscriptionEngine:
                     'end': segment.end,
                     'speaker': format_speaker_label(label)
                 } for segment, _, label in diarize_segments.itertracks(yield_label=True)])
+                     
                 
                 logger.info(f"👥 Found {len(diarize_df)} diarization segments")
                 unique_speakers = diarize_df['speaker'].unique()
@@ -382,9 +384,13 @@ class TranscriptionEngine:
 class LLMProcessor:
     """Handles LLM-based text correction and summarization."""
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, api_base: Optional[str] = None):
         if api_key:
-            openai.api_key = api_key
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url=api_base
+            )
+
         self.correction_prompt = """You are a professional transcription editor. 
         Correct the following transcribed text by:
         1. Fixing typos and transcription errors
@@ -417,8 +423,8 @@ class LLMProcessor:
             
             language_context = f"Language: {language}" if language != "auto" else ""
             
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
+            response = self.client.chat.completions.create(
+                model="gpt-4.1-mini",
                 temperature=0.3,
                 messages=[
                     {
@@ -456,8 +462,8 @@ class LLMProcessor:
                     "10-20%", f"{int(target_ratio*100)}%"
                 )
             
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
+            response = self.client.chat.completions.create(
+                model="gpt-4.1-mini",
                 temperature=0.5,
                 messages=[
                     {
@@ -484,12 +490,12 @@ class LLMProcessor:
 class ProcessingOrchestrator:
     """Orchestrates the complete transcription pipeline."""
     
-    def __init__(self, cache_manager: CacheManager, api_key: Optional[str] = None, hf_token: Optional[str] = None):
+    def __init__(self, cache_manager: CacheManager, api_key: Optional[str] = None, api_base: Optional[str] = None, hf_token: Optional[str] = None):
         logger.info(f"🔍 ProcessingOrchestrator.__init__: hf_token = '{hf_token[:20] + '...' if hf_token and len(hf_token) > 20 else hf_token}' (length: {len(hf_token) if hf_token else 0})")
         
         self.audio_processor = AudioProcessor()
         self.transcription_engine = TranscriptionEngine(cache_manager)
-        self.llm_processor = LLMProcessor(api_key)
+        self.llm_processor = LLMProcessor(api_key, api_base)
         self.file_manager = FileManager()
         self.hf_token = hf_token  # Store HF token for pyannote authentication
         
