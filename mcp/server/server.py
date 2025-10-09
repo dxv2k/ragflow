@@ -16,6 +16,7 @@
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import wraps
@@ -299,18 +300,20 @@ async def list_tools(*, connector) -> list[types.Tool]:
         types.Tool(
             name="grep",
             description=(
-                "Local full-text search (substring) over all chunks in a dataset. "
+                "Local full-text search over all chunks in a dataset with regex support. "
                 "Does NOT use semantic retrieval; purely scans chunk text and returns the best matches. "
-                "Provide a dataset_id and query. Optionally limit by document_ids. Top_k is capped at 10.\n\n"
+                "Provide a dataset_id and query. Optionally limit by document_ids. Top_k is capped at 10.\n"
+                "Supports regex patterns when use_regex=true (e.g., 'video.*analytics', '\\bword\\b', etc.).\n\n"
                 "Available datasets (id, name, desc, counts):\n" + dataset_description
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "dataset_id": {"type": "string", "description": "Target dataset (knowledge base) ID"},
-                    "query": {"type": "string", "description": "Text to search (literal substring)"},
+                    "query": {"type": "string", "description": "Text to search (literal substring or regex pattern if use_regex=true)"},
                     "document_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional: restrict search to specific document IDs"},
                     "case_sensitive": {"type": "boolean", "description": "Case sensitive matching (default false)", "default": False},
+                    "use_regex": {"type": "boolean", "description": "Enable regex pattern matching (default false)", "default": False},
                     "top_k": {"type": "integer", "description": "Max number of chunks to return (<=10)", "default": 10}
                 },
                 "required": ["dataset_id", "query"],
@@ -614,11 +617,21 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
         dataset_id = arguments.get("dataset_id")
         query = arguments.get("query")
         case_sensitive = bool(arguments.get("case_sensitive", False))
+        use_regex = bool(arguments.get("use_regex", False))
         document_ids = arguments.get("document_ids", []) or []
         if not dataset_id or not query:
             return [types.TextContent(type="text", text="Error: dataset_id and query are required.")]
 
         try:
+            # Compile regex pattern if needed
+            regex_pattern = None
+            if use_regex:
+                try:
+                    flags = 0 if case_sensitive else re.IGNORECASE
+                    regex_pattern = re.compile(query, flags)
+                except re.error as e:
+                    return [types.TextContent(type="text", text=f"Error: Invalid regex pattern: {str(e)}")]
+
             # Gather chunks across dataset (optionally restricted to documents)
             target_docs = set(document_ids) if document_ids else None
             all_matches = []
@@ -626,7 +639,7 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
             def norm(s: str) -> str:
                 return s if case_sensitive else s.lower()
 
-            qn = norm(query)
+            qn = norm(query) if not use_regex else None
 
             for doc in connector.iter_documents(dataset_id):
                 doc_id = doc.get("id")
@@ -642,15 +655,26 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                         except Exception:
                             text = str(text)
 
-                    tn = norm(text)
-                    count = tn.count(qn) if qn else 0
-                    if count <= 0:
-                        continue
+                    # Match using regex or literal substring
+                    if use_regex:
+                        matches = list(regex_pattern.finditer(text))
+                        count = len(matches)
+                        if count <= 0:
+                            continue
+                        first_match = matches[0]
+                        first_idx = first_match.start()
+                        match_len = first_match.end() - first_match.start()
+                    else:
+                        tn = norm(text)
+                        count = tn.count(qn) if qn else 0
+                        if count <= 0:
+                            continue
+                        first_idx = tn.find(qn)
+                        match_len = len(query)
 
-                    first_idx = tn.find(qn)
                     # Build a simple highlight snippet around first match
                     start = max(0, first_idx - 80)
-                    end = min(len(text), first_idx + len(query) + 120)
+                    end = min(len(text), first_idx + match_len + 120)
                     snippet = ("..." if start > 0 else "") + text[start:end].strip() + ("..." if end < len(text) else "")
 
                     out = {
@@ -667,7 +691,14 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
 
             if not all_matches:
                 return [types.TextContent(type="text", text=json.dumps({
-                    "request": {"dataset_id": dataset_id, "document_ids": document_ids, "query": query, "mode": "fulltext-local"},
+                    "request": {
+                        "dataset_id": dataset_id,
+                        "document_ids": document_ids,
+                        "query": query,
+                        "use_regex": use_regex,
+                        "case_sensitive": case_sensitive,
+                        "mode": "regex" if use_regex else "fulltext-local"
+                    },
                     "response": "No results found.",
                     "chunks": [],
                     "documents": [],
@@ -716,7 +747,8 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                     "document_ids": document_ids,
                     "query": query,
                     "case_sensitive": case_sensitive,
-                    "mode": "fulltext-local",
+                    "use_regex": use_regex,
+                    "mode": "fulltext-local" if not use_regex else "regex",
                     "top_k": top_k,
                 },
                 "response": summary_text,

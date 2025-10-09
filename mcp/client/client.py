@@ -405,52 +405,58 @@ class RAGFlowMCPClient:
             print("2. 📚 Test list_datasets")
             print("3. 📁 Test list_documents")
             print("4. 🔍 Test knowledge_base_retrieval")
-            print("5. 🔎 Grep chunks (keyword)")
-            print("6. 📖 Read chunk by ID")
-            print("7. 🛠️  Show available tools")
-            print("8. 🔄 Custom tool call")
-            print("9. ❌ Exit")
+            print("5. 🧵 Test grep (regex patterns)")
+            print("6. 🔎 Test BM25 search")
+            print("7. 📖 Read chunk by ID")
+            print("8. 🛠️  Show available tools")
+            print("9. 🔄 Custom tool call")
+            print("10. ❌ Exit")
             print("=" * 50)
-            
+
             try:
-                choice = input("Enter your choice (1-9): ").strip()
-                
+                choice = input("Enter your choice (1-10): ").strip()
+
                 if choice == "1":
                     await self.run_comprehensive_tests()
-                    
+
                 elif choice == "2":
                     await self.test_list_datasets()
-                    
+
                 elif choice == "3":
                     dataset_id = input("Enter dataset_id (or press Enter for auto): ").strip()
                     if not dataset_id:
                         dataset_id = None
                     await self.test_list_documents(dataset_id)
-                    
+
                 elif choice == "4":
                     question = input("Enter your question (or press Enter for default): ").strip()
                     dataset_ids_input = input("Enter dataset_ids (comma-separated, or press Enter for auto): ").strip()
                     dataset_ids = [id.strip() for id in dataset_ids_input.split(",")] if dataset_ids_input else []
                     await self.test_knowledge_base_retrieval(dataset_ids if dataset_ids else None, question if question else None)
-                    
+
                 elif choice == "5":
-                    await self.test_grep()
-                    
+                    dataset_id = input("Enter dataset_id (or press Enter to skip): ").strip()
+                    await self.test_grep(dataset_id if dataset_id else None)
+
                 elif choice == "6":
-                    await self.test_read_chunk()
-                    
+                    dataset_id = input("Enter dataset_id (or press Enter for all): ").strip()
+                    await self.test_bm25_search(dataset_id if dataset_id else None)
+
                 elif choice == "7":
-                    await self.discover_tools()
-                    
+                    await self.test_read_chunk()
+
                 elif choice == "8":
-                    await self.custom_tool_call()
-                    
+                    await self.discover_tools()
+
                 elif choice == "9":
+                    await self.custom_tool_call()
+
+                elif choice == "10":
                     print("👋 Goodbye!")
                     break
-                    
+
                 else:
-                    print("❌ Invalid choice. Please select 1-9.")
+                    print("❌ Invalid choice. Please select 1-10.")
                     
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
@@ -652,8 +658,12 @@ class RAGFlowMCPClient:
             document_ids = [x.strip() for x in doc_ids_input.split(",") if x.strip()] if doc_ids_input else []
 
             # Optional flags
+            regex_in = input("Use regex pattern matching? (y/N): ").strip().lower()
+            use_regex = regex_in in ("y", "yes", "true", "1")
+
             case_in = input("Case sensitive? (y/N): ").strip().lower()
             case_sensitive = case_in in ("y", "yes", "true", "1")
+
             top_k_in = input("Top K (max 10, default 10): ").strip()
             try:
                 top_k = int(top_k_in) if top_k_in else 10
@@ -663,6 +673,7 @@ class RAGFlowMCPClient:
             arguments = {
                 "dataset_id": dataset_id,
                 "query": query,
+                "use_regex": use_regex,
                 "case_sensitive": case_sensitive,
                 "top_k": top_k,
             }
@@ -694,13 +705,90 @@ class RAGFlowMCPClient:
         except Exception as e:
             print(f"❌ Error calling grep: {str(e)}")
 
+    async def test_bm25_search(self, default_dataset_id: Optional[str] = None):
+        """Test bm25_search tool with various configurations."""
+        self.print_separator("Testing BM25 Search Tool", "🔎")
+        try:
+            # Dataset selection
+            dataset_id = default_dataset_id or input("Enter dataset_id (press Enter for all datasets): ").strip()
+            dataset_ids = [dataset_id] if dataset_id else []
+
+            # Query prompt
+            query = input("Search query (required): ").strip()
+            if not query:
+                print("❌ Query is required for BM25 search.")
+                return
+
+            # Test 1: Pure BM25 without rerank
+            print("\n" + "="*60)
+            print("🧪 Test 1: Pure BM25 Search (no rerank)")
+            print("="*60)
+
+            arguments = {
+                "query": query,
+                "dataset_ids": dataset_ids,
+                "top_k": 10,
+                "similarity_threshold": 0.0,
+                "search_mode": "bm25"
+            }
+
+            print(f"📤 Input Arguments: {self.format_tool_arguments(arguments)}")
+
+            start_time = datetime.now()
+            response = await self.session.call_tool("bm25_search", arguments)
+            end_time = datetime.now()
+
+            print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
+            if hasattr(response, 'content') and response.content:
+                for content in response.content:
+                    if hasattr(content, 'text') and content.text:
+                        self._print_text_as_pretty_json(content.text, label="bm25_search (no rerank)")
+                    else:
+                        print(content)
+
+            # Test 2: BM25 with rerank
+            rerank_test = input("\n🤔 Test with rerank model? (y/N): ").strip().lower()
+            if rerank_test in ("y", "yes"):
+                print("\n" + "="*60)
+                print("🧪 Test 2: BM25 Search with Rerank")
+                print("="*60)
+
+                arguments_rerank = {
+                    "query": query,
+                    "dataset_ids": dataset_ids,
+                    "top_k": 10,
+                    "similarity_threshold": 0.0,
+                    "rerank_id": "BAAI/bge-reranker-v2-m3",
+                    "search_mode": "bm25"
+                }
+
+                print(f"📤 Input Arguments: {self.format_tool_arguments(arguments_rerank)}")
+
+                start_time = datetime.now()
+                response_rerank = await self.session.call_tool("bm25_search", arguments_rerank)
+                end_time = datetime.now()
+
+                print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
+                if hasattr(response_rerank, 'content') and response_rerank.content:
+                    for content in response_rerank.content:
+                        if hasattr(content, 'text') and content.text:
+                            self._print_text_as_pretty_json(content.text, label="bm25_search (with rerank)")
+                        else:
+                            print(content)
+
+        except KeyboardInterrupt:
+            print("\n↩️  Cancelled. Returning to menu.")
+            return
+        except Exception as e:
+            print(f"❌ Error calling bm25_search: {str(e)}")
+
 
 async def main():
     # Configuration
     # server_url = "https://wise-gibbon-delicate.ngrok-free.app/mcp/sse"
-    server_url = "http://localhost:9383/sse"  # For local testing
-    
-    auth_token = "ragflow-Q2NmRkMzY4Nzc0MjExZjBhMWNhMDI0Mm"
+    server_url = "http://localhost:9382/sse"  # For local testing
+
+    auth_token = "ragflow-k3MGUzYmM4N2U1NDExZjA5YjBjMDVkNj"
     
     client = RAGFlowMCPClient(server_url, auth_token)
     client.print_banner()
