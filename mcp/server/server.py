@@ -155,7 +155,7 @@ class RAGFlowConnector:
         raise Exception([types.TextContent(type="text", text=res.get("message", "Failed to read chunk"))])
 
     def retrieval(
-        self, dataset_ids, document_ids=None, question="", page=1, page_size=30, similarity_threshold=0.2, vector_similarity_weight=0.3, top_k=1024, rerank_id: str | None = None, keyword: bool = False
+        self, dataset_ids, document_ids=None, question="", page=1, page_size=30, similarity_threshold=0.2, vector_similarity_weight=0.3, top_k=1024, rerank_id: str | None = None, keyword: bool = False, search_mode: str | None = None
     ) -> dict:
         if document_ids is None:
             document_ids = []
@@ -171,6 +171,10 @@ class RAGFlowConnector:
             "dataset_ids": dataset_ids,
             "document_ids": document_ids,
         }
+        # Add search_mode to data_json for routing
+        if search_mode is not None:
+            data_json["search_mode"] = search_mode
+
         # Send a POST request to the backend service
         res = self._post("/retrieval", json=data_json)
         if not res:
@@ -416,6 +420,61 @@ async def list_tools(*, connector) -> list[types.Tool]:
                     }
                 },
                 "required": ["dataset_id"],
+            },
+        ),
+        types.Tool(
+            name="bm25_search",
+            description=(
+                "Pure BM25/full-text search using Elasticsearch's custom BM25 scoring. "
+                "Uses tokenized text matching without vector embeddings - faster than semantic search "
+                "and better for exact keyword/phrase matching. "
+                "Provide dataset_ids and a query. Optionally filter by document_ids.\n\n"
+                "Available datasets:\n" + dataset_description
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Dataset IDs to search (leave empty to search all)"
+                    },
+                    "document_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional: restrict to specific documents"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (will be tokenized)"
+                    },
+                    "keyword_extraction": {
+                        "type": "boolean",
+                        "description": "Use LLM to extract additional keywords (default: false)",
+                        "default": False
+                    },
+                    "rerank_id": {
+                        "type": "string",
+                        "description": "use rerank model 'BAAI/bge-reranker-v2-m3'"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Max results to return (default: 30)",
+                        "default": 30
+                    },
+                    "similarity_threshold": {
+                        "type": "number",
+                        "description": "Minimum score threshold 0-1 (default: 0.0)",
+                        "default": 0.0
+                    },
+                    "search_mode": {
+                        "type": "string",
+                        "description": "Search mode: 'bm25' for pure BM25 full-text, or null/omit for hybrid (default: null)",
+                        "enum": ["bm25", None],
+                        "default": None
+                    }
+                },
+                "required": ["query"]
             },
         ),
     ]
@@ -816,6 +875,73 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
             return format_documents_response(docs_data)
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error listing documents: {str(e)}")]
+
+    elif name == "bm25_search":
+        query = arguments.get("query")
+        if not query:
+            return [types.TextContent(type="text", text="Error: query is required.")]
+
+        dataset_ids = arguments.get("dataset_ids", [])
+        # If no dataset_ids provided, get all available datasets
+        if not dataset_ids:
+            dataset_list_str = connector.list_datasets()
+            if dataset_list_str:
+                for line in dataset_list_str.strip().split('\n'):
+                    if line.strip():
+                        try:
+                            dataset_info = json.loads(line.strip())
+                            dataset_ids.append(dataset_info["id"])
+                        except (json.JSONDecodeError, KeyError):
+                            continue
+
+        try:
+            data = connector.retrieval(
+                dataset_ids=dataset_ids,
+                document_ids=arguments.get("document_ids", []),
+                question=query,
+                page=1,
+                page_size=arguments.get("top_k", 60),
+                similarity_threshold=arguments.get("similarity_threshold", 0.0),
+                vector_similarity_weight=0.0,  # Pure BM25 - no vector search
+                top_k=1024,
+                keyword=arguments.get("keyword_extraction", False),
+                rerank_id=arguments.get("rerank_id", "BAAI/bge-reranker-v2-m3"),  # Add rerank always support
+                search_mode=arguments.get("search_mode", None)  # Route to pure BM25 if "bm25"
+            )
+
+            # Format response
+            chunks_list = data.get("chunks", [])
+            formatted = format_retrieval_response(chunks_list)
+            summary_text = ""
+            try:
+                if formatted and isinstance(formatted[0], types.TextContent):
+                    summary_text = formatted[0].text or ""
+            except Exception:
+                summary_text = ""
+
+            payload = {
+                "request": {
+                    "dataset_ids": dataset_ids,
+                    "document_ids": arguments.get("document_ids", []),
+                    "query": query,
+                    "mode": "bm25",
+                    "vector_similarity_weight": 0.0,
+                    "rerank_id": arguments.get("rerank_id"),
+                },
+                "response": summary_text,
+                "chunks": chunks_list,
+                "documents": data.get("doc_aggs", []),
+                "total": data.get("total", 0),
+            }
+
+            return [types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        except Exception as e:
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
+            return [types.TextContent(type="text", text=f"Error during BM25 search: {str(e)}")]
     
     raise ValueError(f"Tool not found: {name}")
 

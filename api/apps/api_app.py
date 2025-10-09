@@ -865,7 +865,8 @@ def retrieval():
     similarity_threshold = float(req.get("similarity_threshold", 0.2))
     vector_similarity_weight = float(req.get("vector_similarity_weight", 0.3))
     top = int(req.get("top_k", 1024))
-    highlight = bool(req.get("highlight", False)) 
+    highlight = bool(req.get("highlight", False))
+    search_mode = req.get("search_mode", None)  # NEW: support pure BM25 mode
 
     try:
         kbs = KnowledgebaseService.get_by_ids(kb_ids)
@@ -884,10 +885,26 @@ def retrieval():
         if req.get("keyword", False):
             chat_mdl = TenantLLMService.model_instance(kbs[0].tenant_id, LLMType.CHAT)
             question += keyword_extraction(chat_mdl, question)
-        ranks = settings.retrievaler.retrieval(question, embd_mdl, kbs[0].tenant_id, kb_ids, page, size,
-                                               similarity_threshold, vector_similarity_weight, top,
-                                               doc_ids, rerank_mdl=rerank_mdl, highlight= highlight,
-                                               rank_feature=label_question(question, kbs))
+
+        # Route to appropriate retrieval method based on search_mode
+        if search_mode == "bm25":
+            # Pure BM25 full-text search (no vector embeddings)
+            ranks = settings.retrievaler.fulltext_retrieval(
+                question, embd_mdl, kbs[0].tenant_id, kb_ids, page, size,
+                similarity_threshold, vector_similarity_weight, top,
+                doc_ids, rerank_mdl=rerank_mdl, highlight=highlight,
+                rank_feature=label_question(question, kbs))
+        else:
+            # Hybrid search (BM25 + vector embeddings)
+            embd_nms = list(set([kb.embd_id for kb in kbs]))
+            if len(embd_nms) != 1:
+                return get_json_result(
+                    data=False, message='Knowledge bases use different embedding models or does not exist."',
+                    code=settings.RetCode.AUTHENTICATION_ERROR)
+            ranks = settings.retrievaler.retrieval(question, embd_mdl, kbs[0].tenant_id, kb_ids, page, size,
+                                                   similarity_threshold, vector_similarity_weight, top,
+                                                   doc_ids, rerank_mdl=rerank_mdl, highlight=highlight,
+                                                   rank_feature=label_question(question, kbs))
         for c in ranks["chunks"]:
             c.pop("vector", None)
         return get_json_result(data=ranks)
