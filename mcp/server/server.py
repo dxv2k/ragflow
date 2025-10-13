@@ -300,23 +300,42 @@ async def list_tools(*, connector) -> list[types.Tool]:
         types.Tool(
             name="grep",
             description=(
-                "Local full-text search over all chunks in a dataset with regex support. "
+                "Local full-text search (substring) over all chunks in a dataset. "
                 "Does NOT use semantic retrieval; purely scans chunk text and returns the best matches. "
-                "Provide a dataset_id and query. Optionally limit by document_ids. Top_k is capped at 10.\n"
-                "Supports regex patterns when use_regex=true (e.g., 'video.*analytics', '\\bword\\b', etc.).\n\n"
+                "Provide a dataset_id and query. Optionally limit by document_ids. Top_k is capped at 10.\n\n"
                 "Available datasets (id, name, desc, counts):\n" + dataset_description
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "dataset_id": {"type": "string", "description": "Target dataset (knowledge base) ID"},
-                    "query": {"type": "string", "description": "Text to search (literal substring or regex pattern if use_regex=true)"},
+                    "query": {"type": "string", "description": "Text to search (literal substring)"},
                     "document_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional: restrict search to specific document IDs"},
                     "case_sensitive": {"type": "boolean", "description": "Case sensitive matching (default false)", "default": False},
-                    "use_regex": {"type": "boolean", "description": "Enable regex pattern matching (default false)", "default": False},
                     "top_k": {"type": "integer", "description": "Max number of chunks to return (<=10)", "default": 10}
                 },
                 "required": ["dataset_id", "query"],
+            },
+        ),
+        types.Tool(
+            name="re_search",
+            description=(
+                "Regular expression (regex) search over all chunks in a dataset. "
+                "Does NOT use semantic retrieval; purely scans chunk text using regex patterns and returns the best matches. "
+                "Provide a dataset_id and regex pattern. Optionally limit by document_ids. Top_k is capped at 10.\n"
+                "Supports full regex syntax (e.g., 'video.*analytics', '\\bword\\b', 'pattern\\d+', etc.).\n\n"
+                "Available datasets (id, name, desc, counts):\n" + dataset_description
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_id": {"type": "string", "description": "Target dataset (knowledge base) ID"},
+                    "pattern": {"type": "string", "description": "Regular expression pattern to search for"},
+                    "document_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional: restrict search to specific document IDs"},
+                    "case_sensitive": {"type": "boolean", "description": "Case sensitive matching (default false)", "default": False},
+                    "top_k": {"type": "integer", "description": "Max number of chunks to return (<=10)", "default": 10}
+                },
+                "required": ["dataset_id", "pattern"],
             },
         ),
         types.Tool(
@@ -617,21 +636,11 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
         dataset_id = arguments.get("dataset_id")
         query = arguments.get("query")
         case_sensitive = bool(arguments.get("case_sensitive", False))
-        use_regex = bool(arguments.get("use_regex", False))
         document_ids = arguments.get("document_ids", []) or []
         if not dataset_id or not query:
             return [types.TextContent(type="text", text="Error: dataset_id and query are required.")]
 
         try:
-            # Compile regex pattern if needed
-            regex_pattern = None
-            if use_regex:
-                try:
-                    flags = 0 if case_sensitive else re.IGNORECASE
-                    regex_pattern = re.compile(query, flags)
-                except re.error as e:
-                    return [types.TextContent(type="text", text=f"Error: Invalid regex pattern: {str(e)}")]
-
             # Gather chunks across dataset (optionally restricted to documents)
             target_docs = set(document_ids) if document_ids else None
             all_matches = []
@@ -639,7 +648,7 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
             def norm(s: str) -> str:
                 return s if case_sensitive else s.lower()
 
-            qn = norm(query) if not use_regex else None
+            qn = norm(query)
 
             for doc in connector.iter_documents(dataset_id):
                 doc_id = doc.get("id")
@@ -655,26 +664,15 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                         except Exception:
                             text = str(text)
 
-                    # Match using regex or literal substring
-                    if use_regex:
-                        matches = list(regex_pattern.finditer(text))
-                        count = len(matches)
-                        if count <= 0:
-                            continue
-                        first_match = matches[0]
-                        first_idx = first_match.start()
-                        match_len = first_match.end() - first_match.start()
-                    else:
-                        tn = norm(text)
-                        count = tn.count(qn) if qn else 0
-                        if count <= 0:
-                            continue
-                        first_idx = tn.find(qn)
-                        match_len = len(query)
+                    tn = norm(text)
+                    count = tn.count(qn) if qn else 0
+                    if count <= 0:
+                        continue
 
+                    first_idx = tn.find(qn)
                     # Build a simple highlight snippet around first match
                     start = max(0, first_idx - 80)
-                    end = min(len(text), first_idx + match_len + 120)
+                    end = min(len(text), first_idx + len(query) + 120)
                     snippet = ("..." if start > 0 else "") + text[start:end].strip() + ("..." if end < len(text) else "")
 
                     out = {
@@ -695,9 +693,7 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                         "dataset_id": dataset_id,
                         "document_ids": document_ids,
                         "query": query,
-                        "use_regex": use_regex,
-                        "case_sensitive": case_sensitive,
-                        "mode": "regex" if use_regex else "fulltext-local"
+                        "mode": "fulltext-local"
                     },
                     "response": "No results found.",
                     "chunks": [],
@@ -747,8 +743,7 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                     "document_ids": document_ids,
                     "query": query,
                     "case_sensitive": case_sensitive,
-                    "use_regex": use_regex,
-                    "mode": "fulltext-local" if not use_regex else "regex",
+                    "mode": "fulltext-local",
                     "top_k": top_k,
                 },
                 "response": summary_text,
@@ -766,7 +761,156 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                 pass
             return [types.TextContent(type="text", text=f"Error during grep: {str(e)}")]
 
-    if name == "knowledge_base_retrieval":
+    elif name == "re_search":
+        """
+        Regular expression search tool - searches chunks using regex patterns.
+
+        Args:
+            dataset_id: Target dataset ID
+            pattern: Regex pattern to search for
+            document_ids: Optional list of document IDs to restrict search
+            case_sensitive: Whether to use case-sensitive matching (default False)
+            top_k: Maximum number of results to return (capped at 10)
+
+        Returns:
+            JSON response with matched chunks, sorted by match count and position
+        """
+        dataset_id = arguments.get("dataset_id")
+        pattern = arguments.get("pattern")
+        case_sensitive = bool(arguments.get("case_sensitive", False))
+        document_ids = arguments.get("document_ids", []) or []
+        if not dataset_id or not pattern:
+            return [types.TextContent(type="text", text="Error: dataset_id and pattern are required.")]
+
+        try:
+            # Compile regex pattern
+            try:
+                flags = 0 if case_sensitive else re.IGNORECASE
+                regex_pattern = re.compile(pattern, flags)
+            except re.error as e:
+                return [types.TextContent(type="text", text=f"Error: Invalid regex pattern: {str(e)}")]
+
+            # Gather chunks across dataset (optionally restricted to documents)
+            target_docs = set(document_ids) if document_ids else None
+            all_matches = []
+
+            for doc in connector.iter_documents(dataset_id):
+                doc_id = doc.get("id")
+                if target_docs and doc_id not in target_docs:
+                    continue
+                doc_name = doc.get("name") or doc.get("document_keyword") or "Unknown Document"
+                for chunk, doc_meta in connector.iter_chunks(dataset_id, doc_id):
+                    # Extract text
+                    text = chunk.get("content") or chunk.get("text") or ""
+                    if not isinstance(text, str):
+                        try:
+                            text = json.dumps(text, ensure_ascii=False)
+                        except Exception:
+                            text = str(text)
+
+                    # Match using regex
+                    matches = list(regex_pattern.finditer(text))
+                    count = len(matches)
+                    if count <= 0:
+                        continue
+
+                    first_match = matches[0]
+                    first_idx = first_match.start()
+                    match_len = first_match.end() - first_match.start()
+
+                    # Build a simple highlight snippet around first match
+                    start = max(0, first_idx - 80)
+                    end = min(len(text), first_idx + match_len + 120)
+                    snippet = ("..." if start > 0 else "") + text[start:end].strip() + ("..." if end < len(text) else "")
+
+                    out = {
+                        **chunk,
+                        "document_id": chunk.get("document_id") or chunk.get("doc_id") or doc_id,
+                        "kb_id": chunk.get("kb_id") or dataset_id,
+                        "document_keyword": doc_name,
+                        "doc_name": doc_name,
+                        "highlight": snippet,
+                        "_match_count": count,
+                        "_first_pos": first_idx,
+                    }
+                    all_matches.append(out)
+
+            if not all_matches:
+                return [types.TextContent(type="text", text=json.dumps({
+                    "request": {
+                        "dataset_id": dataset_id,
+                        "document_ids": document_ids,
+                        "pattern": pattern,
+                        "case_sensitive": case_sensitive,
+                        "mode": "regex"
+                    },
+                    "response": "No results found.",
+                    "chunks": [],
+                    "documents": [],
+                    "total": 0
+                }, ensure_ascii=False, indent=2))]
+
+            # Sort by match strength, then by earliest position, then shorter content
+            def sort_key(c):
+                content = c.get("content") or ""
+                clen = len(content) if isinstance(content, str) else 0
+                return (-int(c.get("_match_count", 0)), int(c.get("_first_pos", 0)), clen)
+
+            all_matches.sort(key=sort_key)
+
+            # Cap top_k to 10
+            try:
+                req_top_k = int(arguments.get("top_k", 10))
+            except Exception:
+                req_top_k = 10
+            top_k = max(1, min(10, req_top_k))
+
+            top_matches = all_matches[:top_k]
+
+            # Normalize similarity (0..1) based on match_count
+            max_count = max((m.get("_match_count", 0) for m in top_matches), default=1) or 1
+            for m in top_matches:
+                try:
+                    m["similarity"] = float(m.get("_match_count", 0)) / float(max_count)
+                except Exception:
+                    m["similarity"] = 0.0
+                # Remove internal keys
+                m.pop("_match_count", None)
+                m.pop("_first_pos", None)
+
+            formatted = format_retrieval_response(top_matches)
+            summary_text = ""
+            try:
+                if formatted and isinstance(formatted[0], types.TextContent):
+                    summary_text = formatted[0].text or ""
+            except Exception:
+                summary_text = ""
+
+            payload = {
+                "request": {
+                    "dataset_id": dataset_id,
+                    "document_ids": document_ids,
+                    "pattern": pattern,
+                    "case_sensitive": case_sensitive,
+                    "mode": "regex",
+                    "top_k": top_k,
+                },
+                "response": summary_text,
+                "chunks": top_matches,
+                "documents": [],
+                "total": len(all_matches),
+            }
+
+            return [types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        except Exception as e:
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
+            return [types.TextContent(type="text", text=f"Error during re_search: {str(e)}")]
+
+    elif name == "knowledge_base_retrieval":
         document_ids = arguments.get("document_ids", [])
         dataset_ids = arguments.get("dataset_ids", [])
         # Simplified output: always return a single JSON object
