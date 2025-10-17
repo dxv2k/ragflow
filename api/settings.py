@@ -32,6 +32,7 @@ LIGHTEN = int(os.environ.get("LIGHTEN", "0"))
 
 LLM = None
 LLM_FACTORY = None
+LLM_FACTORIES = []
 LLM_BASE_URL = None
 CHAT_MDL = ""
 EMBEDDING_MDL = ""
@@ -75,14 +76,29 @@ BUILTIN_EMBEDDING_MODELS = ["BAAI/bge-large-zh-v1.5@BAAI", "maidalun1020/bce-emb
 
 
 def init_settings():
-    global LLM, LLM_FACTORY, LLM_BASE_URL, LIGHTEN, DATABASE_TYPE, DATABASE, FACTORY_LLM_INFOS, REGISTER_ENABLED
+    global LLM, LLM_FACTORY, LLM_FACTORIES, LLM_BASE_URL, LIGHTEN, DATABASE_TYPE, DATABASE, FACTORY_LLM_INFOS, REGISTER_ENABLED
     LIGHTEN = int(os.environ.get("LIGHTEN", "0"))
     DATABASE_TYPE = os.getenv("DB_TYPE", "mysql")
     DATABASE = decrypt_database_config(name=DATABASE_TYPE)
     LLM = get_base_config("user_default_llm", {})
     LLM_DEFAULT_MODELS = LLM.get("default_models", {})
+
+    # allow multiple factories
+    LLM_FACTORIES = LLM.get("factories", [])
+    # Keep single factory for backward compatibility
     LLM_FACTORY = LLM.get("factory")
+    
+    # If no factories specified but single factory is, use single factory
+    if not LLM_FACTORIES and LLM_FACTORY:
+        LLM_FACTORIES = [LLM_FACTORY]
+    # If factories specified, use the first one as default LLM_FACTORY for backward compatibility
+    elif LLM_FACTORIES:
+        LLM_FACTORY = LLM_FACTORIES[0]
+    
+    print("LLM_FACTORY:\n", LLM_FACTORY)
+    print("LLM_FACTORIES:\n", LLM_FACTORIES)
     LLM_BASE_URL = LLM.get("base_url")
+
     try:
         REGISTER_ENABLED = int(os.environ.get("REGISTER_ENABLED", "1"))
     except Exception:
@@ -105,12 +121,21 @@ def init_settings():
         ASR_MDL = LLM_DEFAULT_MODELS.get("asr_model", ASR_MDL)
         IMAGE2TEXT_MDL = LLM_DEFAULT_MODELS.get("image2text_model", IMAGE2TEXT_MDL)
 
-        # factory can be specified in the config name with "@". LLM_FACTORY will be used if not specified
-        CHAT_MDL = CHAT_MDL + (f"@{LLM_FACTORY}" if "@" not in CHAT_MDL and CHAT_MDL != "" else "")
-        EMBEDDING_MDL = EMBEDDING_MDL + (f"@{LLM_FACTORY}" if "@" not in EMBEDDING_MDL and EMBEDDING_MDL != "" else "")
-        RERANK_MDL = RERANK_MDL + (f"@{LLM_FACTORY}" if "@" not in RERANK_MDL and RERANK_MDL != "" else "")
-        ASR_MDL = ASR_MDL + (f"@{LLM_FACTORY}" if "@" not in ASR_MDL and ASR_MDL != "" else "")
-        IMAGE2TEXT_MDL = IMAGE2TEXT_MDL + (f"@{LLM_FACTORY}" if "@" not in IMAGE2TEXT_MDL and IMAGE2TEXT_MDL != "" else "")
+        # factory can be specified in the config name with "@". First factory from LLM_FACTORIES will be used if not specified
+        def ensure_factory(model, default_factory):
+            if "@" not in model and model != "":
+                # use the default factory (first from LLM_FACTORIES) if not specified
+                return f"{model}@{default_factory}"
+            return model
+
+        # Use the first factory as default for models without explicit factory specification
+        default_factory = LLM_FACTORY if LLM_FACTORY else (LLM_FACTORIES[0] if LLM_FACTORIES else "OpenAI")
+        
+        CHAT_MDL = ensure_factory(CHAT_MDL, default_factory)
+        EMBEDDING_MDL = ensure_factory(EMBEDDING_MDL, default_factory)
+        RERANK_MDL = ensure_factory(RERANK_MDL, default_factory)
+        ASR_MDL = ensure_factory(ASR_MDL, default_factory)
+        IMAGE2TEXT_MDL = ensure_factory(IMAGE2TEXT_MDL, default_factory)
 
     global API_KEY, PARSERS, HOST_IP, HOST_PORT, SECRET_KEY
     API_KEY = LLM.get("api_key")

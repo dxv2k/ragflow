@@ -49,4 +49,14 @@ docker/data
 ragflow.egg*
 .cursor/
 zDocs/
-.env
+
+# Model weights
+*.bin
+*.pt
+*.pth
+*.onnx
+*.ckpt
+
+# Hugging Face cache
+huggingface/
+.cache/
