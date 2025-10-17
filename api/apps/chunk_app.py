@@ -25,8 +25,10 @@ from rag.nlp import search, rag_tokenizer
 from rag.prompts import keyword_extraction, cross_languages
 from rag.settings import PAGERANK_FLD
 from rag.utils import rmSpace
+from rag.utils.storage_factory import STORAGE_IMPL
 from api.db import LLMType, ParserType
 from api.db.services.knowledgebase_service import KnowledgebaseService
+from api.db.services.file2document_service import File2DocumentService
 from api.db.services.llm_service import LLMBundle
 from api.db.services.user_service import UserTenantService
 from api.utils.api_utils import server_error_response, get_data_error_result, validate_request
@@ -115,6 +117,24 @@ def get():
         if str(e).find("NotFoundError") >= 0:
             return get_json_result(data=False, message='Chunk not found!',
                                    code=settings.RetCode.DATA_ERROR)
+        return server_error_response(e)
+
+
+@manager.route("/geturl", methods=["GET"])  # noqa: F821
+# @login_required
+def geturl():
+    chunk_id = request.args["chunk_id"]
+    doc_id = request.args["doc_id"]
+    try:
+        e, doc = DocumentService.get_by_id(doc_id)
+        if not e:
+            return get_data_error_result(message="Document not found!")
+
+        b, n = File2DocumentService.get_storage_address(doc_id=doc_id)
+        expires = datetime.timedelta(days=7)
+        presigned_url = STORAGE_IMPL.get_presigned_url(b, chunk_id, expires)
+        return get_json_result(data=presigned_url)
+    except Exception as e:
         return server_error_response(e)
 
 

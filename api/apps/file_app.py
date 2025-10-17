@@ -16,6 +16,7 @@
 import os
 import pathlib
 import re
+from datetime import timedelta
 
 import flask
 from flask import request
@@ -344,6 +345,21 @@ def get(file_id):
                     'application/%s' %
                     ext.group(1))
         return response
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route('/geturl/<file_id>', methods=['GET'])  # noqa: F821
+# @login_required
+def geturl(file_id):
+    try:
+        e, file = FileService.get_by_id(file_id)
+        if not e:
+            return get_data_error_result(message="Document not found!")
+
+        expires = timedelta(days=7)
+        presigned_url = STORAGE_IMPL.get_presigned_url(file.parent_id, file.location, expires)
+        return get_json_result(data=presigned_url)
     except Exception as e:
         return server_error_response(e)
 

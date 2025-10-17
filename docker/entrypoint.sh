@@ -134,6 +134,27 @@ export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/"
 PY=/ragflow/.venv/bin/python
 
 # -----------------------------------------------------------------------------
+# Apply env variables to MonkeyOCR model_configs.yaml (in-place)
+# -----------------------------------------------------------------------------
+MODEL_CONF="/ragflow/monkeyocr/model_configs.yaml"
+if [[ -f "${MODEL_CONF}" ]]; then
+    # Update api_config.url if MONKEYOCR_API_URL is provided
+    if [[ -n "${MONKEYOCR_API_URL}" ]]; then
+        sed -i "/^api_config:/,/^[^[:space:]]/ s#^\\s*url:.*#  url: ${MONKEYOCR_API_URL}#" "${MODEL_CONF}"
+    fi
+
+    # Always use MONKEYOCR_MODEL_NAME (string identifier) for model_name
+    if [[ -n "${MONKEYOCR_MODEL_NAME}" ]]; then
+        sed -i "/^api_config:/,/^[^[:space:]]/ s#^\\s*model_name:.*#  model_name: ${MONKEYOCR_MODEL_NAME}#" "${MODEL_CONF}"
+    fi
+
+    # Update api_config.api_key if MONKEYOCR_API_KEY is provided
+    if [[ -n "${MONKEYOCR_API_KEY}" ]]; then
+        sed -i "/^api_config:/,/^[^[:space:]]/ s#^\\s*api_key:.*#  api_key: \"${MONKEYOCR_API_KEY}\"#" "${MODEL_CONF}"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
 # Function(s)
 # -----------------------------------------------------------------------------
 
