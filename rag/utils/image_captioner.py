@@ -32,7 +32,7 @@ class ImageCaptioner:
     Optimized for production use with batching and error handling.
     """
     
-    def __init__(self, api_key: str, model: str = "gpt-5-nano-2025-08-07"):
+    def __init__(self, api_key: str, base_url:str, model: str = "gpt-5-nano-2025-08-07"):
         """
         Initialize OpenAI client with GPT-5-nano.
         
@@ -40,7 +40,7 @@ class ImageCaptioner:
             api_key: OpenAI API key
             model: Model name (default: gpt-5-nano-2025-08-07)
         """
-        self.client = openai.OpenAI(api_key=api_key)
+        self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
         logger.info(f"Initialized OpenAI client with model: {model}")
     

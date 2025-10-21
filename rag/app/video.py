@@ -38,7 +38,7 @@ VIDEO_CONFIG = {
     'fallback_interval': 5.0,       # If no speech detected
     'cleanup_temp_files': True,     
     'processing_timeout': 1300,     # 30 minutes max
-    'model_name': "gpt-5-nano-2025-08-07",
+    'model_name': "gpt-5-nano",
 }
 
 
@@ -144,10 +144,10 @@ def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
             
             # Step 5: Initialize image captioner with GPT-5-nano
             callback(0.7, "Initializing GPT-5-nano for frame captioning...")
-            openai_api_key = kwargs.get('openai_api_key', os.getenv('OPENAI_API_KEY'))
-            
+            openai_api_key = kwargs.get('api_key', os.getenv('RAGFLOW_API_KEY'))
+            base_url = kwargs.get('base_url', os.getenv('RAGFLOW_BASE_URL'))
             if openai_api_key:
-                image_captioner = ImageCaptioner(openai_api_key, model=VIDEO_CONFIG['model_name'])
+                image_captioner = ImageCaptioner(openai_api_key, base_url, model=VIDEO_CONFIG['model_name'])
                 
                 # Process frames for captioning
                 frame_data = []
