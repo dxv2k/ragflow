@@ -28,13 +28,13 @@ logger = logging.getLogger(__name__)
 
 class ImageCaptioner:
     """
-    Image captioning using GPT-5-nano with original video-captioning prompts.
+    Image captioning using GPT-5 with original video-captioning prompts.
     Optimized for production use with batching and error handling.
     """
     
-    def __init__(self, api_key: str, base_url:str, model: str = "gpt-5-nano-2025-08-07"):
+    def __init__(self, api_key: str, base_url:str, model: str = "gpt-5"):
         """
-        Initialize OpenAI client with GPT-5-nano.
+        Initialize OpenAI client with GPT-5.
         
         Args:
             api_key: OpenAI API key
@@ -42,7 +42,10 @@ class ImageCaptioner:
         """
         self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
-        logger.info(f"Initialized OpenAI client with model: {model}")
+        logger.info(f"[DEBUG] Initialized OpenAI client with model: {model}")
+        logger.info(f"[DEBUG] API base URL: {base_url}")
+        logger.info(f"[DEBUG] API key (first 10 chars): {api_key[:10] if api_key else 'None'}...")
+        logger.info(f"[DEBUG] OpenAI client version: {openai.__version__}")
     
     def encode_image_to_base64(self, image: np.ndarray, quality: int = 85) -> str:
         """
@@ -88,23 +91,38 @@ class ImageCaptioner:
             prompt += "\nFocus on: WHO is doing WHAT and key discussion points"
             prompt += "\nKeep it under 15 words. Be specific about actions and topics. Must use same language as the transcript."
             
-            response = self.client.responses.create(
-                model=self.model,
-                input=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": prompt},
-                            {
-                                "type": "input_image",
-                                "image_url": f"data:image/jpeg;base64,{image_base64}",
-                            },
-                        ],
-                    }
-                ],
-            )
+            # DEBUG: Log API configuration before making the call
+            logger.info(f"[DEBUG] Attempting API call to: {self.client.base_url}")
+            logger.info(f"[DEBUG] Using model: {self.model}")
+            logger.info(f"[DEBUG] API method: client.chat.completions.create()")
             
-            caption = response.output_text
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+                                },
+                            ],
+                        }
+                    ],
+                    max_tokens=100
+                )
+            except Exception as api_error:
+                logger.error(f"[DEBUG] API call failed with error: {api_error}")
+                logger.error(f"[DEBUG] Error type: {type(api_error).__name__}")
+                # Try to get more details from the error
+                if hasattr(api_error, 'response'):
+                    logger.error(f"[DEBUG] Response status: {api_error.response.status_code}")
+                    logger.error(f"[DEBUG] Response text: {api_error.response.text}")
+                raise
+            
+            caption = response.choices[0].message.content
             logger.debug(f"Generated caption: {caption[:100]}")
             return caption
             
@@ -132,7 +150,7 @@ class ImageCaptioner:
             # Original multi-frame prompt preserved
             content_parts = [
                 {
-                    "type": "input_text",
+                    "type": "text",
                     "text": (
                         f"Provide a brief 1-sentence summary of this {len(images)}-frame meeting segment.\n"
                         f"{context if context else ''}\n"
@@ -147,17 +165,32 @@ class ImageCaptioner:
                 image_base64 = self.encode_image_to_base64(image, quality=75)
                 content_parts.append(
                     {
-                        "type": "input_image",
-                        "image_url": f"data:image/jpeg;base64,{image_base64}",
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
                     }
                 )
             
-            response = self.client.responses.create(
-                model=self.model,
-                input=[{"role": "user", "content": content_parts}],
-            )
+            # DEBUG: Log API configuration before making the call
+            logger.info(f"[DEBUG] Multi-image API call to: {self.client.base_url}")
+            logger.info(f"[DEBUG] Using model: {self.model}")
+            logger.info(f"[DEBUG] Number of images: {len(images)}")
             
-            caption = response.output_text
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": content_parts}],
+                    max_tokens=150
+                )
+            except Exception as api_error:
+                logger.error(f"[DEBUG] Multi-image API call failed with error: {api_error}")
+                logger.error(f"[DEBUG] Error type: {type(api_error).__name__}")
+                # Try to get more details from the error
+                if hasattr(api_error, 'response'):
+                    logger.error(f"[DEBUG] Response status: {api_error.response.status_code}")
+                    logger.error(f"[DEBUG] Response text: {api_error.response.text}")
+                raise
+            
+            caption = response.choices[0].message.content
             logger.debug(f"Generated batch caption for {len(images)} images")
             return caption
             
