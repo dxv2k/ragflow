@@ -20,7 +20,7 @@ class ProcessingStatus(Enum):
 class ProcessingConfig:
     """Configuration for audio processing."""
     language: str = "auto"
-    model_name: str = "large-v3"
+    model_name: str = "large-v2"
     device: str = "auto"
     enable_diarization: bool = True
     min_speakers: int = 1

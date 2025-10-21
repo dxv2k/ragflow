@@ -308,6 +308,13 @@ class LLMBundle:
 
         return txt
 
+    # Optional passthroughs for STT backends that expose rich results (e.g., WhisperX)
+    def get_segments(self):
+        mdl = getattr(self, 'mdl', None)
+        if mdl and hasattr(mdl, 'get_segments'):
+            return mdl.get_segments()
+        return []
+
     def tts(self, text):
         if self.langfuse:
             span = self.trace.span(name="tts", input={"text": text})

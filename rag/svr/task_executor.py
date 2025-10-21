@@ -45,6 +45,7 @@ import exceptiongroup
 import faulthandler
 
 import numpy as np
+from PIL import Image
 from peewee import DoesNotExist
 
 from api.db import LLMType, ParserType, TaskStatus
@@ -284,7 +285,8 @@ async def build_chunks(task, progress_callback):
                 d["id"] = xxhash.xxh64((chunk["content_with_weight"] + str(d["doc_id"])).encode("utf-8")).hexdigest()
                 d["create_time"] = str(datetime.now()).replace("T", " ")[:19]
                 d["create_timestamp_flt"] = datetime.now().timestamp()
-                if not d.get("image"):
+                image_data = d.get("image")
+                if image_data is None or (hasattr(image_data, 'size') and image_data.size == 0):
                     _ = d.pop("image", None)
                     d["img_id"] = ""
                     docs.append(d)
@@ -293,7 +295,18 @@ async def build_chunks(task, progress_callback):
                 output_buffer = BytesIO()
                 if isinstance(d["image"], bytes):
                     output_buffer = BytesIO(d["image"])
+                elif isinstance(d["image"], np.ndarray):
+                    # Convert numpy array (video frame) to PIL Image
+                    # OpenCV uses BGR, PIL uses RGB, so convert if needed
+                    if len(d["image"].shape) == 3 and d["image"].shape[2] == 3:
+                        # Convert BGR to RGB
+                        rgb_image = d["image"][:, :, ::-1]
+                        pil_image = Image.fromarray(rgb_image)
+                    else:
+                        pil_image = Image.fromarray(d["image"])
+                    pil_image.save(output_buffer, format='JPEG')
                 else:
+                    # Assume it's a PIL Image
                     d["image"].save(output_buffer, format='JPEG')
                 await trio.to_thread.run_sync(lambda: STORAGE_IMPL.put(task["kb_id"], d["id"], output_buffer.getvalue()))
 
