@@ -149,9 +149,20 @@ class WhisperXSeq2txt(Base):
         logger.info(f"🔍 WhisperXSeq2txt.__init__: key='{key[:20] + '...' if key and len(key) > 20 else key}' (length: {len(key) if key else 0})")
         logger.info(f"🔍 WhisperXSeq2txt.__init__: kwargs keys={list(kwargs.keys())}")
         
+        # Store OpenAI API credentials for LLM correction/summarization
+        self.openai_api_key = key  # The 'key' parameter is the OpenAI API key
+        self.openai_api_base = kwargs.get('base_url', 'https://llm-proxy.viact.net')
+        logger.info(f"🔍 WhisperXSeq2txt.__init__: Stored openai_api_key (length: {len(self.openai_api_key) if self.openai_api_key else 0})")
+        logger.info(f"🔍 WhisperXSeq2txt.__init__: Stored openai_api_base = '{self.openai_api_base}'")
+        
         # Set the internal model name for WhisperX (can be overridden)
-        self.whisperx_model = kwargs.get('whisperx_model', 'large-v2')
+        self.whisperx_model = kwargs.get('whisperx_model', 'large-v3')
         self.model_name = model_name
+        
+        # Debug: Log what model_name was received
+        logger.info(f"🔍 WhisperXSeq2txt.__init__: Received model_name = '{model_name}'")
+        logger.info(f"🔍 WhisperXSeq2txt.__init__: Set self.model_name = '{self.model_name}'")
+        logger.info(f"🔍 WhisperXSeq2txt.__init__: Set self.whisperx_model = '{self.whisperx_model}'")
         
         # Parse configuration from key if it's a JSON string (from RAGFlow UI)
         config = {}
@@ -185,8 +196,6 @@ class WhisperXSeq2txt(Base):
         
         # Initialize WhisperX API (lazy loading)
         self._whisperx_api = None
-        # Store last detailed result for downstream consumers (segments/language)
-        self._last_result = None
     
     def _get_whisperx_api(self):
         """Lazy initialization of WhisperX API."""
@@ -225,9 +234,17 @@ class WhisperXSeq2txt(Base):
                 else:
                     logger.warning(f"🔍 _get_whisperx_api: config_options not available!")
                 
-                # Initialize with HF token for pyannote authentication
-                logger.info(f"🔍 _get_whisperx_api: Initializing TranscriptionAPI with hf_token")
-                self._whisperx_api = TranscriptionAPI(hf_token=hf_token)
+                # Initialize with OpenAI credentials and HF token
+                logger.info(f"🔍 _get_whisperx_api: Initializing TranscriptionAPI")
+                logger.info(f"🔍 _get_whisperx_api: openai_api_key length = {len(self.openai_api_key) if self.openai_api_key else 0}")
+                logger.info(f"🔍 _get_whisperx_api: openai_api_base = '{self.openai_api_base}'")
+                logger.info(f"🔍 _get_whisperx_api: hf_token length = {len(hf_token) if hf_token else 0}")
+                
+                self._whisperx_api = TranscriptionAPI(
+                    openai_api_key=self.openai_api_key,
+                    openai_api_base=self.openai_api_base,
+                    hf_token=hf_token
+                )
                 
             except ImportError as e:
                 raise ImportError(
@@ -373,8 +390,6 @@ class WhisperXSeq2txt(Base):
                 
                 # Transcribe using WhisperX
                 result = whisperx_api.transcribe_file(temp_file_path, **transcription_config)
-                # Cache for later access
-                self._last_result = result
                 
                 # Extract text from WhisperX result
                 if result and result.segments:
@@ -402,26 +417,6 @@ class WhisperXSeq2txt(Base):
         except Exception as e:
             error_msg = f"**ERROR**: WhisperX transcription failed: {str(e)}"
             return error_msg, 0
-
-    # New accessors for downstream consumers (e.g., video frame sampling)
-    def get_segments(self):
-        """Return last transcription segments as list of dicts with start/end/text and optional speaker/words."""
-        res = self._last_result
-        if not res or not getattr(res, "segments", None):
-            return []
-        segments = []
-        for seg in res.segments:
-            try:
-                segments.append({
-                    "start": getattr(seg, "start", None) if not isinstance(seg, dict) else seg.get("start"),
-                    "end": getattr(seg, "end", None) if not isinstance(seg, dict) else seg.get("end"),
-                    "text": getattr(seg, "text", "").strip() if not isinstance(seg, dict) else (seg.get("text", "").strip()),
-                    "speaker": getattr(seg, "speaker", None) if not isinstance(seg, dict) else seg.get("speaker"),
-                    "words": getattr(seg, "words", None) if not isinstance(seg, dict) else seg.get("words"),
-                })
-            except Exception:
-                continue
-        return segments
 
 
 class TencentCloudSeq2txt(Base):

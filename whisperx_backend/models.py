@@ -32,6 +32,7 @@ class ProcessingConfig:
     compute_type: str = "int8"
     enable_llm_correction: bool = True
     enable_summarization: bool = True
+    llm_correction_chunk_size: int = 100
     output_formats: List[str] = None
     
     # ===== NEW: WhisperX ASR Options =====
@@ -41,9 +42,9 @@ class ProcessingConfig:
     vad_offset: float = 0.363
     
     # ===== NEW: Hybrid Processing Configuration =====
-    transcription_device: Optional[str] = None  # Override device for transcription
-    alignment_device: Optional[str] = None      # Override device for alignment (CPU recommended)
-    diarization_device: Optional[str] = None    # Override device for diarization (GPU recommended)
+    transcription_device: Optional[str] = "cuda"  # Override device for transcription
+    alignment_device: Optional[str] = "cuda"      # Override device for alignment (CPU recommended)
+    diarization_device: Optional[str] = "cuda"    # Override device for diarization (GPU recommended)
     enable_hybrid_processing: bool = True       # Enable smart device allocation
     memory_optimization: bool = True            # Enable memory optimization strategies
     

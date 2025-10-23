@@ -218,7 +218,111 @@ class TranscriptionEngine:
         
         logger.info(f"🧹 Cleared model cache: {cleared_count}")
         return cleared_count
-    
+
+    def apply_text_correction(self, result: Dict, llm_processor, detected_language: str = "vi", chunk_size: int = 15) -> Dict:
+        """Apply LLM-based text correction to transcription results using chunking for better accuracy"""
+        if not result or "segments" not in result:
+            return result
+        
+        try:
+            segments = result["segments"]
+            if not segments:
+                return result
+            
+            logger.info(f"🔄 Processing {len(segments)} segments in chunks of {chunk_size}")
+            
+            # Process segments in chunks
+            corrected_segments = []
+            all_corrected_text = ""
+            all_original_text = ""
+            
+            for i in range(0, len(segments), chunk_size):
+                chunk_segments = segments[i:i + chunk_size]
+                chunk_num = (i // chunk_size) + 1
+                total_chunks = (len(segments) + chunk_size - 1) // chunk_size
+                
+                logger.info(f"📝 Processing chunk {chunk_num}/{total_chunks} ({len(chunk_segments)} segments)")
+                
+                # Extract text from current chunk
+                chunk_original_text = ""
+                for segment in chunk_segments:
+                    speaker = segment.get("speaker", "")
+                    text = segment.get("text", "").strip()
+                    if text:
+                        chunk_original_text += f"[{speaker}] {text}\n"
+                
+                if not chunk_original_text.strip():
+                    # If chunk is empty, just copy original segments
+                    corrected_segments.extend(chunk_segments)
+                    continue
+                
+                # Apply correction to this chunk
+                logger.info(f"🤖 Applying LLM correction to chunk {chunk_num} ({len(chunk_original_text)} chars)")
+                chunk_corrected_text = llm_processor.correct_text(chunk_original_text, detected_language)
+                
+                # Parse corrected chunk back into segments
+                chunk_corrected_segments = self.parse_corrected_text_to_segments(
+                    chunk_corrected_text, chunk_segments
+                )
+                
+                # Adjust segment IDs to maintain global ordering
+                for j, seg in enumerate(chunk_corrected_segments):
+                    seg["id"] = i + j
+                
+                corrected_segments.extend(chunk_corrected_segments)
+                all_original_text += chunk_original_text
+                all_corrected_text += chunk_corrected_text
+                
+                logger.info(f"✅ Chunk {chunk_num} processed: {len(chunk_segments)} -> {len(chunk_corrected_segments)} segments")
+                if len(segments) > 1:
+                    time.sleep(60)
+            
+            # Export original and corrected text to files for comparison
+            if all_original_text.strip() or all_corrected_text.strip():
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                
+                # Create exports directory if it doesn't exist
+                exports_dir = Path("exports")
+                exports_dir.mkdir(exist_ok=True)
+                
+                # Export original text
+                original_file_path = exports_dir / f"original_text_{timestamp}.txt"
+                with open(original_file_path, 'w', encoding='utf-8') as f:
+                    f.write(all_original_text)
+                logger.info(f"📄 Original text exported to: {original_file_path}")
+                
+                # Export corrected text
+                corrected_file_path = exports_dir / f"corrected_text_{timestamp}.txt"
+                with open(corrected_file_path, 'w', encoding='utf-8') as f:
+                    f.write(all_corrected_text)
+                logger.info(f"📄 Corrected text exported to: {corrected_file_path}")
+                
+                logger.info(f"✅ Text files exported for comparison:")
+                logger.info(f"   📋 Original: {original_file_path}")
+                logger.info(f"   📋 Corrected: {corrected_file_path}")
+            
+            # Generate summary from the complete corrected text
+            logger.info("📋 Generating summary from complete corrected text...")
+            summary_text = llm_processor.generate_summary(all_corrected_text)
+            
+            # Store both original and corrected data
+            result["original_text"] = all_original_text
+            result["corrected_text"] = all_corrected_text
+            result["corrected_segments"] = corrected_segments
+            result["summary_text"] = summary_text
+
+            logger.info(f"✅ Original text: {all_original_text[:300]}...")
+            logger.info(f"✅ Corrected text: {all_corrected_text[:300]}...")
+            logger.info(f"✅ Text correction completed: {len(segments)} -> {len(corrected_segments)} segments")
+            logger.info(f"✅ Summary text: {summary_text[:300]}...")
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Text correction failed: {e}")
+            return result
+
     def transcribe(self, audio_path: str, config: ProcessingConfig, hf_token: Optional[str] = None) -> Dict[str, Any]:
         """Perform transcription with WhisperX using hybrid processing."""
         logger.info(f"🎙️ Starting transcription for: {Path(audio_path).name}")
@@ -385,6 +489,10 @@ class LLMProcessor:
     """Handles LLM-based text correction and summarization."""
     
     def __init__(self, api_key: Optional[str] = None, api_base: Optional[str] = None):
+        self.api_key = api_key
+        self.api_base = api_base
+        logger.info(f"🔍 LLMProcessor.__init__: api_key = '{api_key[:10] + '...' if api_key and len(api_key) > 10 else api_key}' (length: {len(api_key) if api_key else 0})")
+
         if api_key:
             self.client = OpenAI(
                 api_key=api_key,
@@ -415,6 +523,10 @@ class LLMProcessor:
     def correct_text(self, text: str, language: str = "auto") -> str:
         """Apply LLM-based text correction."""
         try:
+            if not self.client:
+                logger.info("⏭️ Skipping LLM text correction - no OpenAI credentials provided")
+                return text
+
             if len(text.strip()) < 10:
                 return text
             
@@ -450,6 +562,10 @@ class LLMProcessor:
     def generate_summary(self, text: str, max_length: Optional[int] = None) -> str:
         """Generate summary using LLM."""
         try:
+            if not self.client:
+                logger.info("⏭️ Skipping LLM summarization - no OpenAI credentials provided")
+                return "Summary generation skipped (no OpenAI credentials)."
+
             if len(text.strip()) < 50:
                 return "Text too short for meaningful summary."
             
@@ -520,11 +636,17 @@ class ProcessingOrchestrator:
             logger.info(f"🔍 ProcessingOrchestrator.process_audio: Calling transcription_engine.transcribe with auth_token")
             whisper_result = self.transcription_engine.transcribe(file_path, config, hf_token=auth_token)
             
+            if config.enable_llm_correction:
+                logger.info("🤖 Starting LLM correction phase...")
+                corrected_whisper_result = self.transcription_engine.apply_text_correction(
+                    whisper_result, self.llm_processor, config.language, config.llm_correction_chunk_size
+                )
+
             # Convert to our format
             segments = []
             speakers = set()
             
-            for segment in whisper_result.get("segments", []):
+            for segment in corrected_whisper_result.get("corrected_segments", []):
                 transcription_segment = TranscriptionSegment(
                     start=segment["start"],
                     end=segment["end"],
@@ -537,26 +659,6 @@ class ProcessingOrchestrator:
                 if segment.get("speaker"):
                     speakers.add(segment["speaker"])
             
-            # Get full text
-            full_text = " ".join(seg.text for seg in segments)
-            
-            # Apply LLM corrections if enabled
-            corrected_text = None
-            if config.enable_llm_correction:
-                logger.info("🤖 Starting LLM correction phase...")
-                corrected_text = self.llm_processor.correct_text(
-                    full_text, 
-                    config.language
-                )
-            
-            # Generate summary if enabled
-            summary = None
-            if config.enable_summarization:
-                logger.info("📝 Starting LLM summarization phase...")
-                summary = self.llm_processor.generate_summary(
-                    corrected_text or full_text
-                )
-            
             # Create result
             result = TranscriptionResult(
                 segments=segments,
@@ -564,8 +666,8 @@ class ProcessingOrchestrator:
                 detected_language=whisper_result.get("language"),
                 duration=duration,
                 speakers=list(speakers) if speakers else None,
-                corrected_text=corrected_text,
-                summary=summary,
+                corrected_text=corrected_whisper_result.get("corrected_text", ""),
+                summary=corrected_whisper_result.get("summary_text", ""),
                 processing_time=time.time() - start_time,
                 file_path=Path(file_path)
             )
