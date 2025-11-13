@@ -58,76 +58,11 @@ class TranscriptionAPI:
         """
         # Extract hf_token from kwargs if provided, otherwise use instance token
         hf_token = kwargs.pop('hf_token', None) or getattr(self.orchestrator, 'hf_token', None)
-        
-        config = ProcessingConfig(**kwargs)
-        result = asyncio.run(self.orchestrator.process_audio(file_path, config, hf_token=hf_token))
-        
-        # Create job directory and save results
-        job_dir = self.file_manager.create_job_directory(
-            Path(file_path).name, 
-            job_id=kwargs.get("job_id")
-        )
-        
-        saved_files = self.file_manager.save_result(result, job_dir, config.output_formats)
-        
-        return {
-            "result": result,
-            "job_directory": job_dir,
-            "saved_files": saved_files
-        }
-    
-    def batch_transcribe(self, file_paths: List[str], **kwargs) -> List[Dict[str, Any]]:
-        """
-        Transcribe multiple files in batch.
-        
-        Args:
-            file_paths: List of audio file paths
-            **kwargs: Configuration options
-        
-        Returns:
-            List of results for each file
-        """
-        results = []
-        
-        for file_path in file_paths:
-            try:
-                result = self.transcribe_and_save(file_path, **kwargs)
-                results.append({
-                    "file": file_path,
-                    "success": True,
-                    "result": result
-                })
-            except Exception as e:
-                logger.error(f"Failed to transcribe {file_path}: {e}")
-                results.append({
-                    "file": file_path,
-                    "success": False,
-                    "error": str(e)
-                })
-        
-        return results
-    
-    def get_results(self) -> List[Dict[str, Any]]:
-        """Get all processing results."""
-        return self.file_manager.get_job_results()
-    
-    def clear_cache(self, model_type: Optional[str] = None):
-        """Clear model cache."""
-        self.cache_manager.clear_cache(model_type)
-    
-    def get_system_info(self) -> Dict[str, Any]:
-        """Get system information and cache stats."""
-        memory_info = self.cache_manager.get_memory_usage()
-        cache_stats = self.cache_manager.get_cache_stats()
-        
-        return {
-            "memory_usage": memory_info,
-            "cache_stats": cache_stats,
-            "output_directory": str(self.file_manager.base_output_dir)
-        }
+        openai_api_base = kwargs.pop('openai_api_base', None)
+        api = TranscriptionAPI(hf_token=hf_token, openai_api_base=openai_api_base)
+        return api.transcribe_and_save(file_path, **kwargs)
 
 
-# Convenience functions for simple usage
 def transcribe_audio(file_path: str, **kwargs) -> TranscriptionResult:
     """
     Quick transcription function.

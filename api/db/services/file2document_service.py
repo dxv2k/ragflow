@@ -20,6 +20,7 @@ from api.db.db_models import DB
 from api.db.db_models import File, File2Document
 from api.db.services.common_service import CommonService
 from api.db.services.document_service import DocumentService
+import logging
 from api.utils import current_timestamp, datetime_format
 
 
@@ -66,16 +67,25 @@ class File2DocumentService(CommonService):
     @classmethod
     @DB.connection_context()
     def get_storage_address(cls, doc_id=None, file_id=None):
+        logging.warning(f"file2document_service.get_storage_address: doc_id={doc_id} file_id={file_id}")
         if doc_id:
             f2d = cls.get_by_document_id(doc_id)
         else:
             f2d = cls.get_by_file_id(file_id)
         if f2d:
             file = File.get_by_id(f2d[0].file_id)
+            logging.warning(
+                f"file2document_service.get_storage_address: file_id={file.id} "
+                f"parent_id={getattr(file,'parent_id',None)} location={getattr(file,'location',None)} "
+                f"source_type={getattr(file,'source_type',None)}"
+            )
             if not file.source_type or file.source_type == FileSource.LOCAL:
                 return file.parent_id, file.location
             doc_id = f2d[0].document_id
 
         assert doc_id, "please specify doc_id"
         e, doc = DocumentService.get_by_id(doc_id)
+        logging.warning(
+            f"file2document_service.get_storage_address: fallback doc.kb_id={doc.kb_id} doc.location={doc.location}"
+        )
         return doc.kb_id, doc.location
