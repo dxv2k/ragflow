@@ -56,6 +56,8 @@ services:
       - RAGFLOW_MCP_ROOT_PATH=/mcp
       - MINIO_PUBLIC_BASE_URL=https://kb.viact.net:28866
       - MINIO_PUBLIC_PATH_PREFIX=/storage
+      - RAGFLOW_API_KEY=${RAGFLOW_API_KEY}
+      - RAGFLOW_BASE_URL=${RAGFLOW_BASE_URL}
     networks:
       - ragflow
     restart: on-failure
