@@ -19,6 +19,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import wraps
+from typing import Any, Dict
 
 import click
 import requests
@@ -286,6 +287,56 @@ def with_api_key(required=True):
     return decorator
 
 
+def _normalize_audio_json(raw_text: str) -> str:
+    """Convert WhisperX audio JSON blobs into speaker-aware plain text."""
+    if not isinstance(raw_text, str):
+        return raw_text
+
+    candidate = raw_text.strip()
+    if not candidate or not candidate.startswith("{"):
+        return raw_text
+    if "segments" not in candidate and "word_segments" not in candidate:
+        return raw_text
+
+    try:
+        data: Dict[str, Any] = json.loads(candidate)
+    except (json.JSONDecodeError, TypeError):
+        return raw_text
+
+    segments = data.get("segments")
+    if not isinstance(segments, list):
+        return raw_text
+
+    lines: list[str] = []
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        seg_text = (seg.get("text") or "").strip()
+        if not seg_text:
+            continue
+        speaker = seg.get("speaker")
+        if speaker:
+            lines.append(f"[{speaker}] {seg_text}")
+        else:
+            lines.append(seg_text)
+
+    if not lines:
+        return raw_text
+    return " ".join(lines)
+
+
+def _normalize_chunk_dict(chunk: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure chunk text fields are plain text before sending to clients."""
+    if not isinstance(chunk, dict):
+        return chunk
+
+    for key in ("content", "content_with_weight", "highlight"):
+        value = chunk.get(key)
+        if isinstance(value, str):
+            chunk[key] = _normalize_audio_json(value)
+    return chunk
+
+
 @app.list_tools()
 @with_api_key(required=True)
 async def list_tools(*, connector) -> list[types.Tool]:
@@ -436,9 +487,9 @@ def format_retrieval_response(chunks_data):
         try:
             chunk_obj = json.loads(chunk) if isinstance(chunk, str) else chunk
 
-            text = chunk_obj.get("content", "") or ""
+            text = _normalize_audio_json(chunk_obj.get("content", "") or "")
             content = (text[:200] + "...") if len(text) > 200 else text
-            highlight = chunk_obj.get("highlight") or ""
+            highlight = _normalize_audio_json(chunk_obj.get("highlight") or "")
             doc_name = (
                 chunk_obj.get("document_keyword")
                 or chunk_obj.get("doc_name")
@@ -643,6 +694,9 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                 m.pop("_match_count", None)
                 m.pop("_first_pos", None)
 
+            for match in top_matches:
+                _normalize_chunk_dict(match)
+
             formatted = format_retrieval_response(top_matches)
             summary_text = ""
             try:
@@ -705,6 +759,8 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
 
             # Build formatted summary from chunks (pass dicts directly)
             chunks_list = data.get("chunks", [])
+            for chunk in chunks_list:
+                _normalize_chunk_dict(chunk)
             formatted = format_retrieval_response(chunks_list)  # returns [TextContent]
             summary_text = ""
             try:
@@ -748,6 +804,8 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
             return [types.TextContent(type="text", text="Error: dataset_id, document_id, and chunk_id are required.")]
         try:
             data = connector.read_chunk(dataset_id=dataset_id, document_id=document_id, chunk_id=chunk_id)
+            for chunk in data.get("chunks", []):
+                _normalize_chunk_dict(chunk)
             return [
                 types.TextContent(
                     type="text",
@@ -775,6 +833,8 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                 page_size=arguments.get("page_size", 20),
                 keywords=arguments.get("keywords"),
             )
+            for chunk in data.get("chunks", []):
+                _normalize_chunk_dict(chunk)
             return [
                 types.TextContent(
                     type="text",
