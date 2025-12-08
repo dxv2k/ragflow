@@ -18,6 +18,7 @@ import logging
 import copy
 import time
 import os
+import threading
 
 from huggingface_hub import snapshot_download
 
@@ -31,6 +32,19 @@ import cv2
 import onnxruntime as ort
 
 from .postprocess import build_post_process
+
+# Hot fix: force OCR models to initialize on CPU only to avoid GPU run-option races.
+FORCE_OCR_CPU = False 
+
+
+def _create_run_options(shrink_target: str | None) -> ort.RunOptions:
+    """
+    Create a fresh RunOptions object per inference call so onnxruntime runs remain thread-safe.
+    """
+    run_options = ort.RunOptions()
+    if shrink_target:
+        run_options.add_run_config_entry("memory.enable_memory_arena_shrinkage", shrink_target)
+    return run_options
 
 loaded_models = {}
 
@@ -82,6 +96,9 @@ def load_model(model_dir, nm, device_id: int | None = None):
             model_file_path))
 
     def cuda_is_available():
+        if FORCE_OCR_CPU:
+            logging.info("load_model forced to use CPU; GPU path disabled")
+            return False
         try:
             import torch
             if torch.cuda.is_available() and torch.cuda.device_count() > device_id:
@@ -98,7 +115,7 @@ def load_model(model_dir, nm, device_id: int | None = None):
 
     # https://github.com/microsoft/onnxruntime/issues/9509#issuecomment-951546580
     # Shrink GPU memory after execution
-    run_options = ort.RunOptions()
+    shrink_target = None
     if cuda_is_available():
         cuda_provider_options = {
             "device_id": device_id, # Use specific GPU
@@ -111,16 +128,16 @@ def load_model(model_dir, nm, device_id: int | None = None):
             providers=['CUDAExecutionProvider'],
             provider_options=[cuda_provider_options]
             )
-        run_options.add_run_config_entry("memory.enable_memory_arena_shrinkage", "gpu:" + str(device_id))
+        shrink_target = "gpu:" + str(device_id)
         logging.info(f"load_model {model_file_path} uses GPU")
     else:
         sess = ort.InferenceSession(
             model_file_path,
             options=options,
             providers=['CPUExecutionProvider'])
-        run_options.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu")
+        shrink_target = "cpu"
         logging.info(f"load_model {model_file_path} uses CPU")
-    loaded_model = (sess, run_options)
+    loaded_model = (sess, shrink_target, threading.Lock())
     loaded_models[model_cached_tag] = loaded_model
     return loaded_model
 
@@ -135,7 +152,7 @@ class TextRecognizer:
             "use_space_char": True
         }
         self.postprocess_op = build_post_process(postprocess_params)
-        self.predictor, self.run_options = load_model(model_dir, 'rec', device_id)
+        self.predictor, self.run_options_target, self.session_lock = load_model(model_dir, 'rec', device_id)
         self.input_tensor = self.predictor.get_inputs()[0]
 
     def resize_norm_img(self, img, max_wh_ratio):
@@ -382,7 +399,8 @@ class TextRecognizer:
             input_dict[self.input_tensor.name] = norm_img_batch
             for i in range(100000):
                 try:
-                    outputs = self.predictor.run(None, input_dict, self.run_options)
+                    with self.session_lock:
+                        outputs = self.predictor.run(None, input_dict, _create_run_options(self.run_options_target))
                     break
                 except Exception as e:
                     if i >= 3:
@@ -421,7 +439,7 @@ class TextDetector:
                               "unclip_ratio": 1.5, "use_dilation": False, "score_mode": "fast", "box_type": "quad"}
 
         self.postprocess_op = build_post_process(postprocess_params)
-        self.predictor, self.run_options = load_model(model_dir, 'det', device_id)
+        self.predictor, self.run_options_target, self.session_lock = load_model(model_dir, 'det', device_id)
         self.input_tensor = self.predictor.get_inputs()[0]
 
         img_h, img_w = self.input_tensor.shape[2:]
@@ -495,7 +513,8 @@ class TextDetector:
         input_dict[self.input_tensor.name] = img
         for i in range(100000):
             try:
-                outputs = self.predictor.run(None, input_dict, self.run_options)
+                with self.session_lock:
+                    outputs = self.predictor.run(None, input_dict, _create_run_options(self.run_options_target))
                 break
             except Exception as e:
                 if i >= 3:
