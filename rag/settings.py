@@ -55,7 +55,7 @@ try:
 except Exception:
     REDIS = {}
     pass
-DOC_MAXIMUM_SIZE = int(os.environ.get("MAX_CONTENT_LENGTH", 128 * 1024 * 1024))
+DOC_MAXIMUM_SIZE = int(os.environ.get("MAX_CONTENT_LENGTH", 512 * 1024 * 1024))
 
 SVR_QUEUE_NAME = "rag_flow_svr_queue"
 SVR_CONSUMER_GROUP_NAME = "rag_flow_svr_task_broker"

@@ -19,12 +19,13 @@ services:
       - --mcp-script-path=/ragflow/mcp/server/server.py
       # MCP server defaults: --mode=host --no-transport-streamable-http-enabled
       # For self-host mode, uncomment below:
-      # - --mcp-mode=self-host
-      # - --mcp-host-api-key=ragflow-ljMjA5MDUwM2QzMzExZjA4MmNmMDI0Mm
+      - --mcp-mode=self-host
+      - --mcp-host-api-key=ragflow-test-key-12345
     container_name: ragflow-server
     ports:
       - ${SVR_HTTP_PORT}:9380
       - 81:81
+      - 28866:81
       - 443:443
       - 5678:5678
       - 5679:5679
@@ -53,6 +54,10 @@ services:
       - HF_ENDPOINT=${HF_ENDPOINT}
       - MACOS=${MACOS}
       - RAGFLOW_MCP_ROOT_PATH=/mcp
+      - MINIO_PUBLIC_BASE_URL=https://kb.viact.net:28866
+      - MINIO_PUBLIC_PATH_PREFIX=/storage
+      - RAGFLOW_API_KEY=${RAGFLOW_API_KEY}
+      - RAGFLOW_BASE_URL=${RAGFLOW_BASE_URL}
     networks:
       - ragflow
     restart: on-failure

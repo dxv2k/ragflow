@@ -26,7 +26,7 @@ from api.utils.file_utils import get_project_base_directory
 from .operators import *  # noqa: F403
 from .operators import preprocess
 from . import operators
-from .ocr import load_model
+from .ocr import load_model, _create_run_options
 
 class Recognizer:
     def __init__(self, label_list, task_name, model_dir=None):
@@ -45,7 +45,7 @@ class Recognizer:
             model_dir = os.path.join(
                         get_project_base_directory(),
                         "rag/res/deepdoc")
-        self.ort_sess, self.run_options = load_model(model_dir, task_name)
+        self.ort_sess, self.run_options_target, self.session_lock = load_model(model_dir, task_name)
         self.input_names = [node.name for node in self.ort_sess.get_inputs()]
         self.output_names = [node.name for node in self.ort_sess.get_outputs()]
         self.input_shape = self.ort_sess.get_inputs()[0].shape[2:4]
@@ -423,7 +423,14 @@ class Recognizer:
             inputs = self.preprocess(batch_image_list)
             logging.debug("preprocess")
             for ins in inputs:
-                bb = self.postprocess(self.ort_sess.run(None, {k:v for k,v in ins.items() if k in self.input_names}, self.run_options)[0], ins, thr)
+                run_options = _create_run_options(self.run_options_target)
+                with self.session_lock:
+                    result = self.ort_sess.run(
+                        None,
+                        {k: v for k, v in ins.items() if k in self.input_names},
+                        run_options
+                    )[0]
+                bb = self.postprocess(result, ins, thr)
                 res.append(bb)
 
         #seeit.save_results(image_list, res, self.label_list, threshold=thr)

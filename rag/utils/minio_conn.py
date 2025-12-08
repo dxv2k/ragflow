@@ -16,6 +16,7 @@
 
 import logging
 import time
+from urllib.parse import urlparse
 from minio import Minio
 from minio.error import S3Error
 from io import BytesIO
@@ -37,6 +38,7 @@ class RAGFlowMinio:
             pass
 
         try:
+            # Internal client: unchanged internal IO endpoint
             self.conn = Minio(settings.MINIO["host"],
                               access_key=settings.MINIO["user"],
                               secret_key=settings.MINIO["password"],
@@ -109,9 +111,36 @@ class RAGFlowMinio:
             return False
 
     def get_presigned_url(self, bucket, fnm, expires):
+        """Generate a presigned URL that is consumable at the public /storage path.
+
+        Internal IO stays on the internal endpoint. We only shape the returned URL
+        so that the visible host comes from public_base_url and the path includes
+        the configured public_path_prefix. The canonical path remains /bucket/object
+        when MinIO verifies the signature (proxy strips the prefix).
+        """
         for _ in range(10):
             try:
-                return self.conn.get_presigned_url("GET", bucket, fnm, expires)
+                logging.warning(f"minio_conn.get_presigned_url: bucket={bucket} key={fnm} expires={expires}")
+                public_base = (settings.MINIO.get("public_base_url") or "").strip()
+                public_prefix = (settings.MINIO.get("public_path_prefix") or "").strip()
+
+                # Always presign with the internal client (host minio:9000)
+                url = self.conn.get_presigned_url("GET", bucket, fnm, expires)
+                logging.warning(f"minio_conn.get_presigned_url: internal_url={url}")
+
+                if public_base:
+                    if public_base.endswith('/'):
+                        public_base = public_base[:-1]
+                    if public_prefix and not public_prefix.startswith('/'):
+                        public_prefix = '/' + public_prefix
+                    scheme_sep = url.find('://')
+                    if scheme_sep != -1:
+                        path_start = url.find('/', scheme_sep + 3)
+                        if path_start != -1:
+                            path_and_query = url[path_start:]
+                            url = f"{public_base}{public_prefix}{path_and_query}"
+                logging.warning(f"minio_conn.get_presigned_url: final_url={url}")
+                return url
             except Exception:
                 logging.exception(f"Fail to get_presigned {bucket}/{fnm}:")
                 self.__open__()

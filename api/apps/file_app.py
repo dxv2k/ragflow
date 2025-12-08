@@ -16,6 +16,7 @@
 import os
 import pathlib
 import re
+import logging
 from datetime import timedelta
 
 import flask
@@ -353,14 +354,41 @@ def get(file_id):
 # @login_required
 def geturl(file_id):
     try:
+        logging.warning(f"file_app.geturl: file_id={file_id}")
         e, file = FileService.get_by_id(file_id)
         if not e:
             return get_data_error_result(message="Document not found!")
 
-        expires = timedelta(days=7)
-        presigned_url = STORAGE_IMPL.get_presigned_url(file.parent_id, file.location, expires)
-        return get_json_result(data=presigned_url)
+        # Return the file content directly (like /get) instead of a presigned URL
+        logging.warning(
+            f"file_app.geturl: file found name={file.name} type={file.type} parent_id={file.parent_id} location={file.location}"
+        )
+        blob = STORAGE_IMPL.get(file.parent_id, file.location)
+        if not blob:
+            b, n = File2DocumentService.get_storage_address(file_id=file_id)
+            logging.warning(
+                f"file_app.geturl: fallback storage_address bucket={b} name={n}"
+            )
+            blob = STORAGE_IMPL.get(b, n)
+        else:
+            logging.warning("file_app.geturl: served from file.parent_id/location")
+
+        response = flask.make_response(blob)
+        try:
+            logging.warning(
+                f"file_app.geturl: returning bytes size={len(blob) if blob else None}"
+            )
+        except Exception:
+            pass
+        ext = re.search(r"\.([^.]+)$", file.name)
+        if ext:
+            if file.type == FileType.VISUAL.value:
+                response.headers.set('Content-Type', 'image/%s' % ext.group(1))
+            else:
+                response.headers.set('Content-Type', 'application/%s' % ext.group(1))
+        return response
     except Exception as e:
+        logging.exception(f"file_app.geturl: exception for file_id={file_id}")
         return server_error_response(e)
 
 

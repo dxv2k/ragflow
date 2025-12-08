@@ -22,17 +22,22 @@ services:
     command:
       - --enable-mcpserver
       - --mcp-host=0.0.0.0
-      - --mcp-port=9382
-      - --mcp-base-url=http://localhost:9380
+      - --mcp-port=9383
+      - --mcp-base-url=http://127.0.0.1:9380
       - --mcp-script-path=/ragflow/mcp/server/server.py
-      - --mcp-mode=self-host
+      # MCP server defaults: --mode=host --no-transport-streamable-http-enabled
+      # For self-host mode, uncomment below:
+      - --mcp-mode=host
       - --mcp-host-api-key=ragflow-ljMjA5MDUwM2QzMzExZjA4MmNmMDI0Mm
     container_name: ragflow-server
     ports:
       - ${SVR_HTTP_PORT}:9380
       - 81:81
-      # Expose HTTPS only if you configure TLS in nginx (443)
-      - 9382:9382 # entry for MCP (host_port:docker_port). The docker_port must match the value you set for `mcp-port` above.
+      - 28866:81
+      - 443:443
+      - 5678:5678
+      - 5679:5679
+      - 9383:9383 # entry for MCP (host_port:docker_port). The docker_port must match the value you set for `mcp-port` above.
     volumes:
       - ../api:/ragflow/api
       - ../models:/ragflow/models
@@ -47,12 +52,16 @@ services:
       # MonkeyOCR specific volumes
       - monkeyocr_models:/ragflow/monkeyocr/model_weight
       - monkeyocr_cache:/ragflow/monkeyocr/cache
+      - ../mcp:/ragflow/mcp
 
     env_file: .env
     environment:
       - TZ=${TIMEZONE}
       - HF_ENDPOINT=${HF_ENDPOINT}
       - MACOS=${MACOS}
+      - RAGFLOW_MCP_ROOT_PATH=/mcp
+      - RAGFLOW_API_KEY=${RAGFLOW_API_KEY}
+      - RAGFLOW_BASE_URL=${RAGFLOW_BASE_URL}
       # MonkeyOCR specific environment variables
       - MONKEYOCR_API_URL=${MONKEYOCR_API_URL}
       - MONKEYOCR_MODEL_NAME=${MONKEYOCR_MODEL_NAME}
@@ -62,6 +71,8 @@ services:
       - MONKEYOCR_MODEL_PATH=/ragflow/monkeyocr/model_weight/Recognition
       - MONKEYOCR_CACHE_DIR=/ragflow/monkeyocr/cache
       - HF_HUB_CACHE=/ragflow/monkeyocr/model_weight
+      - MINIO_PUBLIC_BASE_URL=https://kb.viact.net:28866
+      - MINIO_PUBLIC_PATH_PREFIX=/storage
     networks:
       - ragflow
     restart: on-failure

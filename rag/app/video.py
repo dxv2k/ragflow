@@ -38,7 +38,7 @@ VIDEO_CONFIG = {
     'fallback_interval': 5.0,       # If no speech detected
     'cleanup_temp_files': True,     
     'processing_timeout': 1300,     # 30 minutes max
-    'model_name': "gpt-5-nano",
+    'model_name': "gpt-4.1-mini",
 }
 
 
@@ -142,10 +142,16 @@ def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
 
             callback(0.6, f"Extracted {len(frames)} frames")
             
-            # Step 5: Initialize image captioner with GPT-5-nano
-            callback(0.7, "Initializing GPT-5-nano for frame captioning...")
+            # Step 5: Initialize image captioner with GPT-5
+            callback(0.7, "Initializing GPT-5 for frame captioning...")
             openai_api_key = kwargs.get('api_key', os.getenv('RAGFLOW_API_KEY'))
             base_url = kwargs.get('base_url', os.getenv('RAGFLOW_BASE_URL'))
+            logger.info(f"[DEBUG] Video processing - API KEY (first 10): {openai_api_key[:10] if openai_api_key else 'None'}...")
+            logger.info(f"[DEBUG] Video processing - BASE_URL: {base_url}")
+            logger.info(f"[DEBUG] Video processing - MODEL: {VIDEO_CONFIG['model_name']}")
+            logger.info(f"[DEBUG] Video processing - RAGFLOW_API_KEY env: {os.getenv('RAGFLOW_API_KEY', 'Not set')[:10] if os.getenv('RAGFLOW_API_KEY') else 'None'}...")
+            logger.info(f"[DEBUG] Video processing - RAGFLOW_BASE_URL env: {os.getenv('RAGFLOW_BASE_URL', 'Not set')}")
+            
             if openai_api_key:
                 image_captioner = ImageCaptioner(openai_api_key, base_url, model=VIDEO_CONFIG['model_name'])
                 
@@ -159,7 +165,7 @@ def chunk(filename, binary, tenant_id, lang, callback=None, **kwargs):
                     })
                 
                 # Get captions for frames with transcript context
-                callback(0.8, "Generating frame captions with GPT-5-nano...")
+                callback(0.8, "Generating frame captions with GPT-5...")
                 
                 # Create simple segments from transcription for context
                 audio_segments = [{

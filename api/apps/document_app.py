@@ -18,6 +18,7 @@ import os.path
 import pathlib
 import re
 from datetime import timedelta
+import logging
 
 import flask
 from flask import request
@@ -443,13 +444,16 @@ def get(doc_id):
 # @login_required
 def geturl(doc_id):
     try:
+        logging.warning(f"document_app.geturl: doc_id={doc_id}")
         e, doc = DocumentService.get_by_id(doc_id)
         if not e:
             return get_data_error_result(message="Document not found!")
 
         b, n = File2DocumentService.get_storage_address(doc_id=doc_id)
+        logging.warning(f"document_app.geturl: storage_address bucket={b} name={n}")
         expires = timedelta(days=7)
         presigned_url = STORAGE_IMPL.get_presigned_url(b, n, expires)
+        logging.warning(f"document_app.geturl: presigned_url={presigned_url}")
         return get_json_result(data=presigned_url)
     except Exception as e:
         return server_error_response(e)

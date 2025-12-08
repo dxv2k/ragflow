@@ -1,6 +1,8 @@
 """High-level API for the transcription backend."""
 
 import asyncio
+import os
+import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -15,8 +17,33 @@ logger = get_whisperx_logger(__name__)
 class TranscriptionAPI:
     """High-level API for audio transcription."""
     
-    def __init__(self, output_dir: str = "./outputs", openai_api_key: Optional[str] = None, openai_api_base: Optional[str] = "https://llm-proxy.viact.net", hf_token: Optional[str] = None):
-        # Debug logging for HF token tracing
+    def __init__(self, output_dir: str = "./outputs", openai_api_key: Optional[str] = None, openai_api_base: Optional[str] = None, hf_token: Optional[str] = None):
+        # Read API key from service configuration if not provided
+        if not openai_api_key:
+            # First try environment variable
+            openai_api_key = os.getenv('RAGFLOW_API_KEY', '')
+            
+        if not openai_api_base:
+            # First try environment variable
+            openai_api_base = os.getenv('RAGFLOW_BASE_URL', 'https://llm-proxy.viact.net')
+            
+        # If still not available, try reading from service configuration file
+        if not openai_api_key or not openai_api_base:
+            try:
+                with open("/ragflow/conf/service_conf.yaml", "r") as f:
+                    config = yaml.safe_load(f)
+                    if not openai_api_key:
+                        openai_api_key = config.get("user_default_llm", {}).get("api_key", "")
+                    if not openai_api_base:
+                        openai_api_base = config.get("user_default_llm", {}).get("base_url", "https://llm-proxy.viact.net")
+            except Exception as e:
+                logger.warning(f"Failed to read service configuration: {e}")
+                if not openai_api_base:
+                    openai_api_base = "https://llm-proxy.viact.net"
+        
+        # Debug logging for API key tracing
+        logger.info(f"🔍 TranscriptionAPI.__init__: openai_api_key = '{openai_api_key[:10] if openai_api_key and len(openai_api_key) > 10 else openai_api_key}' (length: {len(openai_api_key) if openai_api_key else 0})")
+        logger.info(f"🔍 TranscriptionAPI.__init__: openai_api_base = '{openai_api_base}'")
         logger.info(f"🔍 TranscriptionAPI.__init__: hf_token = '{hf_token[:20] + '...' if hf_token and len(hf_token) > 20 else hf_token}' (length: {len(hf_token) if hf_token else 0})")
         
         self.cache_manager = CacheManager()
@@ -24,7 +51,7 @@ class TranscriptionAPI:
         self.orchestrator = ProcessingOrchestrator(self.cache_manager, openai_api_key, openai_api_base, hf_token)
         
         logger.info("TranscriptionAPI initialized")
-        logger.info(f"🔍 TranscriptionAPI.__init__: ProcessingOrchestrator initialized with hf_token")
+        logger.info(f"🔍 TranscriptionAPI.__init__: ProcessingOrchestrator initialized with API keys")
     
     def transcribe_file(self, file_path: str, **kwargs) -> TranscriptionResult:
         """
