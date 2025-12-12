@@ -219,6 +219,50 @@ class TranscriptionEngine:
         logger.info(f"🧹 Cleared model cache: {cleared_count}")
         return cleared_count
 
+    @staticmethod
+    def parse_corrected_text_to_segments(corrected_text: str, original_segments: List[Dict]) -> List[Dict]:
+        """Parse LLM-corrected text back into segments using newlines as boundaries"""
+        if not corrected_text or not original_segments:
+            return original_segments
+        
+        corrected_segments = []
+        lines = [line.strip() for line in corrected_text.split('\n') if line.strip()]
+        
+        logger.info(f"🔄 Parsing {len(lines)} lines from corrected text into segments")
+        
+        for i, line in enumerate(lines):
+            # Try to extract speaker from format [SPEAKER_XX] text
+            speaker = "Unknown"
+            text = line
+            
+            if line.startswith('[') and ']' in line:
+                bracket_end = line.find(']')
+                speaker = line[1:bracket_end]
+                text = line[bracket_end + 1:].strip()
+            
+            # Use timing from corresponding original segment, or estimate if beyond range
+            if i < len(original_segments):
+                original_segment = original_segments[i]
+                start_time = original_segment.get("start", 0.0)
+                end_time = original_segment.get("end", 0.0)
+            else:
+                # Estimate timing for extra segments
+                last_end = corrected_segments[-1]["end"] if corrected_segments else 0.0
+                start_time = last_end
+                end_time = last_end + 3.0  # 3 second duration estimate
+            
+            corrected_segment = {
+                "id": i,
+                "start": start_time,
+                "end": end_time,
+                "text": text,
+                "speaker": speaker
+            }
+            corrected_segments.append(corrected_segment)
+        
+        logger.info(f"✅ Parsed {len(corrected_segments)} corrected segments")
+        return corrected_segments
+
     def apply_text_correction(self, result: Dict, llm_processor, detected_language: str = "vi", chunk_size: int = 15) -> Dict:
         """Apply LLM-based text correction to transcription results using chunking for better accuracy"""
         if not result or "segments" not in result:
