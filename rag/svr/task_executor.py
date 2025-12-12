@@ -20,6 +20,7 @@ import random
 import sys
 import threading
 import time
+from collections import deque
 
 from api.utils.log_utils import initRootLogger, get_project_base_directory
 from graphrag.general.index import run_graphrag
@@ -109,6 +110,12 @@ minio_limiter = trio.CapacityLimiter(MAX_CONCURRENT_MINIO)
 WORKER_HEARTBEAT_TIMEOUT = int(os.environ.get('WORKER_HEARTBEAT_TIMEOUT', '120'))
 stop_event = threading.Event()
 
+# Task scheduler configuration
+BIG_TASK_PAGE_THRESHOLD = int(os.environ.get('BIG_TASK_PAGE_THRESHOLD', '5'))
+
+# Global task scheduler instance (will be initialized in main)
+task_scheduler = None
+
 
 def signal_handler(sig, frame):
     logging.info("Received interrupt signal, shutting down...")
@@ -152,6 +159,179 @@ def stop_tracemalloc(signum, frame):
 class TaskCanceledException(Exception):
     def __init__(self, msg):
         self.msg = msg
+
+
+def is_big_task(task):
+    """
+    Determine if a task is a big task (takes more than 10 mins, e.g., PDF with 50+ pages).
+    
+    Args:
+        task: Task dictionary containing task information
+        
+    Returns:
+        bool: True if task is considered big, False otherwise
+    """
+    # Check page count: if to_page is valid and page count > threshold
+    from_page = task.get("from_page", 0)
+    to_page = task.get("to_page", 0)
+    
+    # If to_page is a very large number (default), we need to estimate
+    # For now, we'll use a simple heuristic: if to_page > threshold or 
+    # if the range is very large, consider it big
+    if to_page > 0 and to_page < 100000000:  # Valid page number (not default)
+        page_count = to_page - from_page + 1
+        if page_count >= BIG_TASK_PAGE_THRESHOLD:
+            return True
+    
+    # Also check file size as a heuristic (large files often take longer)
+    # A 50-page PDF is typically 5-10MB, but we'll be conservative
+    file_size = task.get("size", 0)
+    if file_size > 2 * 1024 * 1024:  # > 10MB
+        return True
+    
+    return False
+
+
+class TaskScheduler:
+    """
+    Task scheduler that ensures only one big task runs at a time.
+    Small tasks can run concurrently with big tasks, but two big tasks cannot run simultaneously.
+    """
+    def __init__(self, max_concurrent_tasks):
+        self.max_concurrent_tasks = max_concurrent_tasks
+        self.small_task_queue = deque()  # Queue for small tasks
+        self.big_task_queue = deque()    # Queue for big tasks
+        # Use unbounded channel (infinity) to avoid blocking the collector
+        self.task_channel_send, self.task_channel_receive = trio.open_memory_channel(float('inf'))
+        self.scheduler_lock = trio.Lock()
+        self.running_tasks = {}  # task_id -> is_big
+        self.running_big_tasks = 0  # Count of currently running big tasks
+        
+    async def add_task(self, redis_msg, task):
+        """
+        Add a task to the appropriate queue based on its size.
+        
+        Args:
+            redis_msg: Redis message object
+            task: Task dictionary
+        """
+        async with self.scheduler_lock:
+            task_id = task["id"]
+            is_big = is_big_task(task)
+            
+            # Store task info with redis_msg
+            task_info = {
+                "redis_msg": redis_msg,
+                "task": task,
+                "is_big": is_big,
+                "task_id": task_id
+            }
+            
+            if is_big:
+                self.big_task_queue.append(task_info)
+                logging.info(f"Task {task_id} (BIG) added to big task queue. Queue size: {len(self.big_task_queue)}")
+            else:
+                self.small_task_queue.append(task_info)
+                logging.info(f"Task {task_id} (SMALL) added to small task queue. Queue size: {len(self.small_task_queue)}")
+            
+            # Try to schedule tasks
+            await self._try_schedule()
+    
+    async def task_completed(self, task_id):
+        """
+        Notify scheduler that a task has completed.
+        
+        Args:
+            task_id: ID of the completed task
+        """
+        async with self.scheduler_lock:
+            if task_id in self.running_tasks:
+                was_big = self.running_tasks[task_id]
+                del self.running_tasks[task_id]
+                if was_big:
+                    self.running_big_tasks -= 1
+                    logging.info(f"Big task {task_id} completed. Running big tasks: {self.running_big_tasks}")
+                else:
+                    logging.info(f"Small task {task_id} completed. Running tasks: {len(self.running_tasks)}")
+                
+                # Try to schedule more tasks
+                await self._try_schedule()
+    
+    async def _try_schedule(self):
+        """
+        Try to schedule tasks from queues to available workers.
+        This method should be called with scheduler_lock held.
+        """
+        available_slots = self.max_concurrent_tasks - len(self.running_tasks)
+        
+        if available_slots <= 0:
+            return
+        
+        # Schedule tasks while we have available slots
+        while available_slots > 0:
+            scheduled = False
+            
+            # Priority 1: Schedule small tasks if available
+            if len(self.small_task_queue) > 0:
+                task_info = self.small_task_queue.popleft()
+                await self._assign_task(task_info)
+                available_slots -= 1
+                scheduled = True
+                logging.info(f"Scheduled small task {task_info['task_id']} from queue")
+            
+            # Priority 2: Schedule big task only if no big task is running
+            elif len(self.big_task_queue) > 0 and self.running_big_tasks == 0:
+                task_info = self.big_task_queue.popleft()
+                await self._assign_task(task_info)
+                available_slots -= 1
+                scheduled = True
+                logging.info(f"Scheduled big task {task_info['task_id']} from queue")
+            
+            if not scheduled:
+                break
+    
+    async def _assign_task(self, task_info):
+        """
+        Assign a task to a worker by sending it through the channel.
+        This method should be called with scheduler_lock held.
+        """
+        task_id = task_info["task_id"]
+        is_big = task_info["is_big"]
+        
+        self.running_tasks[task_id] = is_big
+        if is_big:
+            self.running_big_tasks += 1
+        
+        # Send task to worker through channel
+        await self.task_channel_send.send(task_info)
+    
+    async def get_next_task(self):
+        """
+        Get the next task from the scheduler (blocking).
+        Workers call this to get tasks.
+        
+        Returns:
+            tuple: (redis_msg, task) or (None, None) if stopped
+        """
+        try:
+            task_info = await self.task_channel_receive.receive()
+            return task_info["redis_msg"], task_info["task"]
+        except trio.EndOfChannel:
+            return None, None
+    
+    def get_queue_status(self):
+        """
+        Get current queue status for monitoring.
+        
+        Returns:
+            dict: Queue status information
+        """
+        return {
+            "small_queue_size": len(self.small_task_queue),
+            "big_queue_size": len(self.big_task_queue),
+            "running_tasks": len(self.running_tasks),
+            "running_big_tasks": self.running_big_tasks
+        }
 
 
 def set_progress(task_id, from_page=0, to_page=-1, prog=None, msg="Processing..."):
@@ -624,11 +804,17 @@ async def do_handle_task(task):
 
 
 async def handle_task():
-    global DONE_TASKS, FAILED_TASKS
-    redis_msg, task = await collect()
-    if not task:
-        await trio.sleep(5)
+    global DONE_TASKS, FAILED_TASKS, task_scheduler
+    if task_scheduler is None:
+        logging.error("Task scheduler is not initialized!")
         return
+    
+    # Get task from scheduler instead of directly from collect
+    redis_msg, task = await task_scheduler.get_next_task()
+    if not task:
+        return
+    
+    task_id = task["id"]
     try:
         logging.info(f"handle_task begin for task {json.dumps(task)}")
         CURRENT_TASKS[task["id"]] = copy.deepcopy(task)
@@ -648,8 +834,19 @@ async def handle_task():
         except Exception:
             pass
         logging.exception(f"handle_task got exception for task {json.dumps(task)}")
-    redis_msg.ack()
-    gc.collect()
+    finally:
+        # Notify scheduler that task is completed
+        try:
+            await task_scheduler.task_completed(task_id)
+        except Exception:
+            logging.exception(f"Failed to notify scheduler of task {task_id} completion")
+        # Always ack the redis message
+        if redis_msg:
+            try:
+                redis_msg.ack()
+            except Exception:
+                logging.exception(f"Failed to ack redis message for task {task_id}")
+        gc.collect()
 
 
 async def report_status():
@@ -730,6 +927,36 @@ def recover_pending_tasks():
             redis_lock.release()
             stop_event.wait(60)
         
+async def task_collector():
+    """
+    Continuously collect tasks from Redis and add them to the scheduler.
+    """
+    global task_scheduler
+    if task_scheduler is None:
+        logging.error("Task scheduler is not initialized in task_collector!")
+        return
+    
+    while not stop_event.is_set():
+        try:
+            redis_msg, task = await collect()
+            if task:
+                try:
+                    await task_scheduler.add_task(redis_msg, task)
+                except Exception:
+                    logging.exception(f"Failed to add task {task.get('id', 'unknown')} to scheduler")
+                    # If we can't add to scheduler, ack the message to avoid reprocessing
+                    if redis_msg:
+                        try:
+                            redis_msg.ack()
+                        except Exception:
+                            logging.exception("Failed to ack redis message after scheduler error")
+            else:
+                await trio.sleep(5)
+        except Exception:
+            logging.exception("task_collector got exception")
+            await trio.sleep(5)
+
+
 async def task_manager():
     try:
         await handle_task()
@@ -738,6 +965,7 @@ async def task_manager():
 
 
 async def main():
+    global task_scheduler
     logging.info(r"""
   ______           __      ______                     __
  /_  __/___ ______/ /__   / ____/  _____  _______  __/ /_____  _____
@@ -760,8 +988,16 @@ async def main():
 
     threading.Thread(name="RecoverPendingTask", target=recover_pending_tasks).start()
 
+    # Initialize task scheduler
+    task_scheduler = TaskScheduler(MAX_CONCURRENT_TASKS)
+    logging.info(f"Task scheduler initialized with MAX_CONCURRENT_TASKS={MAX_CONCURRENT_TASKS}, BIG_TASK_PAGE_THRESHOLD={BIG_TASK_PAGE_THRESHOLD}")
+
     async with trio.open_nursery() as nursery:
+        # Start task collector to continuously collect tasks from Redis
+        nursery.start_soon(task_collector)
+        # Start status reporter
         nursery.start_soon(report_status)
+        # Start worker tasks
         while not stop_event.is_set():
             await task_limiter.acquire()
             nursery.start_soon(task_manager)
