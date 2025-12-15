@@ -73,6 +73,7 @@ services:
       - HF_HUB_CACHE=/ragflow/monkeyocr/model_weight
       - MINIO_PUBLIC_BASE_URL=https://kb.viact.net:28866
       - MINIO_PUBLIC_PATH_PREFIX=/storage
+      - MAX_CONCURRENT_TASKS=${MAX_CONCURRENT_TASKS}
     networks:
       - ragflow
     restart: on-failure
