@@ -157,6 +157,85 @@ class Dealer:
             keywords=keywords
         )
 
+    def fulltext_search(self, req, idx_names: str | list[str],
+               kb_ids: list[str],
+               emb_mdl=None,
+               highlight=False,
+               rank_feature: dict | None = None
+               ):
+        filters = self.get_filters(req)
+        orderBy = OrderByExpr()
+
+        pg = int(req.get("page", 1)) - 1
+        topk = int(req.get("topk", 1024))
+        ps = int(req.get("size", topk))
+        offset, limit = pg * ps, ps
+
+        src = req.get("fields",
+                      ["docnm_kwd", "content_ltks", "kb_id", "img_id", "title_tks", "important_kwd", "position_int",
+                       "doc_id", "page_num_int", "top_int", "create_timestamp_flt", "knowledge_graph_kwd",
+                       "question_kwd", "question_tks", "doc_type_kwd",
+                       "available_int", "content_with_weight", PAGERANK_FLD, TAG_FLD])
+        kwds = set([])
+
+        qst = req.get("question", "")
+        q_vec = []
+        if not qst:
+            if req.get("sort"):
+                orderBy.asc("page_num_int")
+                orderBy.asc("top_int")
+                orderBy.desc("create_timestamp_flt")
+            res = self.dataStore.search(src, [], filters, [], orderBy, offset, limit, idx_names, kb_ids)
+            total = self.dataStore.getTotal(res)
+            logging.debug("Dealer.search TOTAL: {}".format(total))
+        else:
+            highlightFields = ["content_ltks", "title_tks"] if highlight else []
+            matchText, keywords = self.qryr.question(qst, min_match=0.3)
+
+            # Pure BM25 full-text search - only use text matching, no vector embeddings
+            matchExprs = [matchText]
+            res = self.dataStore.search(src, highlightFields, filters, matchExprs, orderBy, offset, limit,
+                                        idx_names, kb_ids, rank_feature=rank_feature)
+            total = self.dataStore.getTotal(res)
+            logging.debug("Dealer.fulltext_search TOTAL: {}".format(total))
+
+            # If result is empty, try again with lower min_match
+            if total == 0:
+                if filters.get("doc_id"):
+                    res = self.dataStore.search(src, [], filters, [], orderBy, offset, limit, idx_names, kb_ids)
+                    total = self.dataStore.getTotal(res)
+                else:
+                    matchText, _ = self.qryr.question(qst, min_match=0.1)
+                    filters.pop("doc_id", None)
+                    res = self.dataStore.search(src, highlightFields, filters, [matchText],
+                                                orderBy, offset, limit, idx_names, kb_ids, rank_feature=rank_feature)
+                    total = self.dataStore.getTotal(res)
+                    logging.debug("Dealer.fulltext_search 2 TOTAL: {}".format(total))
+
+            for k in keywords:
+                kwds.add(k)
+                for kk in rag_tokenizer.fine_grained_tokenize(k).split():
+                    if len(kk) < 2:
+                        continue
+                    if kk in kwds:
+                        continue
+                    kwds.add(kk)
+
+        logging.debug(f"TOTAL: {total}")
+        ids = self.dataStore.getChunkIds(res)
+        keywords = list(kwds)
+        highlight = self.dataStore.getHighlight(res, keywords, "content_with_weight")
+        aggs = self.dataStore.getAggregation(res, "docnm_kwd")
+        return self.SearchResult(
+            total=total,
+            ids=ids,
+            query_vector=q_vec,
+            aggregation=aggs,
+            highlight=highlight,
+            field=self.dataStore.getFields(res, src),
+            keywords=keywords
+        )
+
     @staticmethod
     def trans2floats(txt):
         return [get_float(t) for t in txt.split("\t")]
@@ -382,9 +461,10 @@ class Dealer:
         idx = np.argsort(sim * -1)[(page - 1) * page_size:page * page_size]
 
 
-        dim = len(sres.query_vector)
-        vector_column = f"q_{dim}_vec"
-        zero_vector = [0.0] * dim
+        # For BM25 search, query_vector is None since we don't use embeddings
+        dim = 0
+        vector_column = None
+        zero_vector = []
         if doc_ids:
             similarity_threshold = 0
             page_size = 30
@@ -415,7 +495,143 @@ class Dealer:
                 "similarity": sim[i],
                 "vector_similarity": vsim[i],
                 "term_similarity": tsim[i],
-                "vector": chunk.get(vector_column, zero_vector),
+                "vector": zero_vector if vector_column else [],
+                "positions": position_int,
+                "doc_type_kwd": chunk.get("doc_type_kwd", "")
+            }
+            if highlight and sres.highlight:
+                if id in sres.highlight:
+                    d["highlight"] = rmSpace(sres.highlight[id])
+                else:
+                    d["highlight"] = d["content_with_weight"]
+            ranks["chunks"].append(d)
+            if dnm not in ranks["doc_aggs"]:
+                ranks["doc_aggs"][dnm] = {"doc_id": did, "count": 0}
+            ranks["doc_aggs"][dnm]["count"] += 1
+        ranks["doc_aggs"] = [{"doc_name": k,
+                              "doc_id": v["doc_id"],
+                              "count": v["count"]} for k,
+                                                       v in sorted(ranks["doc_aggs"].items(),
+                                                                   key=lambda x: x[1]["count"] * -1)]
+        ranks["chunks"] = ranks["chunks"][:page_size]
+
+        return ranks
+
+    def fulltext_retrieval(self, question, embd_mdl, tenant_ids, kb_ids, page, page_size, similarity_threshold=0.2,
+                           vector_similarity_weight=0.3, top=1024, doc_ids=None, aggs=True,
+                           rerank_mdl=None, highlight=False,
+                           rank_feature: dict | None = {PAGERANK_FLD: 10}):
+        """
+        Pure BM25 full-text retrieval with optional reranking.
+        Uses fulltext_search (no vector embeddings) instead of hybrid search.
+
+        Args:
+            question: Search query
+            tenant_ids: Tenant IDs (str or list)
+            kb_ids: Knowledge base IDs
+            page: Page number
+            page_size: Results per page
+            similarity_threshold: Minimum similarity score
+            vector_similarity_weight: Weight for rerank scores (if rerank_mdl provided)
+            top: Top-K results to retrieve
+            doc_ids: Optional document ID filter
+            aggs: Whether to include aggregations
+            rerank_mdl: Optional rerank model
+            highlight: Whether to highlight matches
+            rank_feature: Optional ranking features
+
+        Returns:
+            dict with total, chunks, and doc_aggs
+        """
+
+        ranks = {"total": 0, "chunks": [], "doc_aggs": {}}
+        if not question:
+            return ranks
+
+        RERANK_LIMIT = 64
+        RERANK_LIMIT = int(RERANK_LIMIT//page_size + ((RERANK_LIMIT%page_size)/(page_size*1.) + 0.5)) * page_size if page_size>1 else 1
+        if RERANK_LIMIT < 1: ## when page_size is very large the RERANK_LIMIT will be 0.
+            RERANK_LIMIT = 1
+        req = {"kb_ids": kb_ids, "doc_ids": doc_ids, "page": math.ceil(page_size*page/RERANK_LIMIT), "size": RERANK_LIMIT,
+               "question": question, "vector": True, "topk": top,
+               "similarity": similarity_threshold,
+               "available_int": 1}
+
+
+        if isinstance(tenant_ids, str):
+            tenant_ids = tenant_ids.split(",")
+
+        # Prepare request for fulltext search (pure BM25)
+        req = {
+            "question": question,
+            "page": math.ceil(page_size*page/RERANK_LIMIT),
+            "size": RERANK_LIMIT,
+            "vector": False,  # Explicitly disable vector search
+            "topk": top,
+            "similarity": similarity_threshold,
+            "available_int": 1,
+            "fields": ["docnm_kwd", "content_ltks", "kb_id", "img_id", "title_tks", "important_kwd", "position_int",
+                      "doc_id", "page_num_int", "top_int", "create_timestamp_flt", "knowledge_graph_kwd",
+                      "question_kwd", "question_tks", "doc_type_kwd",
+                      "available_int", "content_with_weight", PAGERANK_FLD, TAG_FLD]
+        }
+        if doc_ids:
+            req["doc_ids"] = doc_ids
+        if kb_ids:
+            req["kb_ids"] = kb_ids
+
+        sres = self.fulltext_search(req, [index_name(tid) for tid in tenant_ids],
+                           kb_ids, None, highlight, rank_feature=rank_feature)  # Pass None for emb_mdl to avoid vector search
+
+        if rerank_mdl and sres.total > 0:
+            # For reranking, still use vector embeddings to compute similarity scores
+            sim, tsim, vsim = self.rerank_by_model(rerank_mdl,
+                                                   sres, question, 1 - vector_similarity_weight,
+                                                   vector_similarity_weight,
+                                                   rank_feature=rank_feature)
+        else:
+            sim, tsim, vsim = self.rerank(
+                sres, question, 1 - vector_similarity_weight, vector_similarity_weight,
+                rank_feature=rank_feature)
+        # Already paginated in search function
+        idx = np.argsort(sim * -1)[(page - 1) * page_size:page * page_size]
+
+
+        # For BM25 search, query_vector is None since we don't use embeddings
+        dim = 0
+        vector_column = None
+        zero_vector = []
+        if doc_ids:
+            similarity_threshold = 0
+            page_size = 30
+        sim_np = np.array(sim)
+        filtered_count = (sim_np >= similarity_threshold).sum()    
+        ranks["total"] = int(filtered_count) # Convert from np.int64 to Python int otherwise JSON serializable error
+        for i in idx:
+            if sim[i] < similarity_threshold:
+                break
+            if len(ranks["chunks"]) >= page_size:
+                if aggs:
+                    continue
+                break
+            id = sres.ids[i]
+            chunk = sres.field[id]
+            dnm = chunk.get("docnm_kwd", "")
+            did = chunk.get("doc_id", "")
+            position_int = chunk.get("position_int", [])
+            d = {
+                "chunk_id": id,
+                "content_ltks": chunk["content_ltks"],
+                "content_with_weight": chunk["content_with_weight"],
+                "doc_id": did,
+                "docnm_kwd": dnm,
+                "kb_id": chunk["kb_id"],
+                "important_kwd": chunk.get("important_kwd", []),
+                "image_id": chunk.get("img_id", ""),
+                "similarity": sim[i],
+                "vector_similarity": vsim[i],
+                "term_similarity": tsim[i],
+                "vector": zero_vector if vector_column else [],
                 "positions": position_int,
                 "doc_type_kwd": chunk.get("doc_type_kwd", "")
             }

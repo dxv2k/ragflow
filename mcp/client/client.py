@@ -405,52 +405,63 @@ class RAGFlowMCPClient:
             print("2. 📚 Test list_datasets")
             print("3. 📁 Test list_documents")
             print("4. 🔍 Test knowledge_base_retrieval")
-            print("5. 🔎 Grep chunks (keyword)")
-            print("6. 📖 Read chunk by ID")
-            print("7. 🛠️  Show available tools")
-            print("8. 🔄 Custom tool call")
-            print("9. ❌ Exit")
+            print("5. 🔍 Test grep (substring search)")
+            print("6. 🧵 Test re_search (regex patterns)")
+            print("7. 🔎 Test BM25 search")
+            print("8. 📖 Read chunk by ID")
+            print("9. 🛠️  Show available tools")
+            print("10. 🔄 Custom tool call")
+            print("11. ❌ Exit")
             print("=" * 50)
-            
+
             try:
-                choice = input("Enter your choice (1-9): ").strip()
-                
+                choice = input("Enter your choice (1-11): ").strip()
+
                 if choice == "1":
                     await self.run_comprehensive_tests()
-                    
+
                 elif choice == "2":
                     await self.test_list_datasets()
-                    
+
                 elif choice == "3":
                     dataset_id = input("Enter dataset_id (or press Enter for auto): ").strip()
                     if not dataset_id:
                         dataset_id = None
                     await self.test_list_documents(dataset_id)
-                    
+
                 elif choice == "4":
                     question = input("Enter your question (or press Enter for default): ").strip()
                     dataset_ids_input = input("Enter dataset_ids (comma-separated, or press Enter for auto): ").strip()
                     dataset_ids = [id.strip() for id in dataset_ids_input.split(",")] if dataset_ids_input else []
                     await self.test_knowledge_base_retrieval(dataset_ids if dataset_ids else None, question if question else None)
-                    
+
                 elif choice == "5":
-                    await self.test_grep()
-                    
+                    dataset_id = input("Enter dataset_id (or press Enter to skip): ").strip()
+                    await self.test_grep(dataset_id if dataset_id else None)
+
                 elif choice == "6":
-                    await self.test_read_chunk()
-                    
+                    dataset_id = input("Enter dataset_id (or press Enter to skip): ").strip()
+                    await self.test_re_search(dataset_id if dataset_id else None)
+
                 elif choice == "7":
-                    await self.discover_tools()
-                    
+                    dataset_id = input("Enter dataset_id (or press Enter for all): ").strip()
+                    await self.test_bm25_search(dataset_id if dataset_id else None)
+
                 elif choice == "8":
-                    await self.custom_tool_call()
-                    
+                    await self.test_read_chunk()
+
                 elif choice == "9":
+                    await self.discover_tools()
+
+                elif choice == "10":
+                    await self.custom_tool_call()
+
+                elif choice == "11":
                     print("👋 Goodbye!")
                     break
-                    
+
                 else:
-                    print("❌ Invalid choice. Please select 1-9.")
+                    print("❌ Invalid choice. Please select 1-11.")
                     
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
@@ -654,6 +665,7 @@ class RAGFlowMCPClient:
             # Optional flags
             case_in = input("Case sensitive? (y/N): ").strip().lower()
             case_sensitive = case_in in ("y", "yes", "true", "1")
+
             top_k_in = input("Top K (max 10, default 10): ").strip()
             try:
                 top_k = int(top_k_in) if top_k_in else 10
@@ -694,13 +706,166 @@ class RAGFlowMCPClient:
         except Exception as e:
             print(f"❌ Error calling grep: {str(e)}")
 
+    async def test_re_search(self, default_dataset_id: Optional[str] = None):
+        """
+        Test re_search tool: prompts for dataset, regex pattern, optional document_ids, and prints JSON.
+
+        This tool performs regex pattern matching across all chunks in a dataset.
+        """
+        self.print_separator("Testing re_search Tool", "🧵")
+        try:
+            # Dataset selection
+            dataset_id = default_dataset_id or input("Enter dataset_id (press Enter to list): ").strip()
+            if not dataset_id:
+                print("\n📚 Listing datasets to help you choose...")
+                ds_resp = await self.session.call_tool("list_datasets", {})
+                if hasattr(ds_resp, 'content') and ds_resp.content:
+                    for c in ds_resp.content:
+                        if hasattr(c, 'text') and c.text:
+                            print(c.text)
+                dataset_id = input("\nEnter dataset_id (or 'q' to cancel): ").strip()
+                if not dataset_id or dataset_id.lower() == 'q':
+                    print("↩️  Cancelled. Returning to menu.")
+                    return
+
+            # Regex pattern prompt
+            pattern = input("Enter regex pattern to search (required): ").strip()
+            if not pattern:
+                print("❌ Pattern is required for re_search.")
+                return
+
+            # Optional document IDs
+            doc_ids_input = input("Restrict to document_ids? (comma-separated, optional): ").strip()
+            document_ids = [x.strip() for x in doc_ids_input.split(",") if x.strip()] if doc_ids_input else []
+
+            # Optional flags
+            case_in = input("Case sensitive? (y/N): ").strip().lower()
+            case_sensitive = case_in in ("y", "yes", "true", "1")
+
+            top_k_in = input("Top K (max 10, default 10): ").strip()
+            try:
+                top_k = int(top_k_in) if top_k_in else 10
+            except ValueError:
+                top_k = 10
+
+            arguments = {
+                "dataset_id": dataset_id,
+                "pattern": pattern,
+                "case_sensitive": case_sensitive,
+                "top_k": top_k,
+            }
+            if document_ids:
+                arguments["document_ids"] = document_ids
+
+            print(f"\n📤 Input Arguments: {self.format_tool_arguments(arguments)}")
+
+            start_time = datetime.now()
+            response = await self.session.call_tool("re_search", arguments)
+            end_time = datetime.now()
+
+            print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
+            if hasattr(response, 'content') and response.content:
+                for content in response.content:
+                    if hasattr(content, 'text') and content.text:
+                        self._print_text_as_pretty_json(content.text, label="re_search")
+                    else:
+                        print(content)
+            else:
+                print(f"📄 Raw Response: {response}")
+
+            # Full response for verification
+            self._print_full_calltool_result(response, label="re_search: Full CallToolResult")
+
+        except KeyboardInterrupt:
+            print("\n↩️  Cancelled. Returning to menu.")
+            return
+        except Exception as e:
+            print(f"❌ Error calling re_search: {str(e)}")
+
+    async def test_bm25_search(self, default_dataset_id: Optional[str] = None):
+        """Test bm25_search tool with various configurations."""
+        self.print_separator("Testing BM25 Search Tool", "🔎")
+        try:
+            # Dataset selection
+            dataset_id = default_dataset_id or input("Enter dataset_id (press Enter for all datasets): ").strip()
+            dataset_ids = [dataset_id] if dataset_id else []
+
+            # Query prompt
+            query = input("Search query (required): ").strip()
+            if not query:
+                print("❌ Query is required for BM25 search.")
+                return
+
+            # Test 1: Pure BM25 without rerank
+            print("\n" + "="*60)
+            print("🧪 Test 1: Pure BM25 Search (no rerank)")
+            print("="*60)
+
+            arguments = {
+                "query": query,
+                "dataset_ids": dataset_ids,
+                "top_k": 10,
+                "similarity_threshold": 0.0,
+                "search_mode": "bm25"
+            }
+
+            print(f"📤 Input Arguments: {self.format_tool_arguments(arguments)}")
+
+            start_time = datetime.now()
+            response = await self.session.call_tool("bm25_search", arguments)
+            end_time = datetime.now()
+
+            print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
+            if hasattr(response, 'content') and response.content:
+                for content in response.content:
+                    if hasattr(content, 'text') and content.text:
+                        self._print_text_as_pretty_json(content.text, label="bm25_search (no rerank)")
+                    else:
+                        print(content)
+
+            # Test 2: BM25 with rerank
+            rerank_test = input("\n🤔 Test with rerank model? (y/N): ").strip().lower()
+            if rerank_test in ("y", "yes"):
+                print("\n" + "="*60)
+                print("🧪 Test 2: BM25 Search with Rerank")
+                print("="*60)
+
+                arguments_rerank = {
+                    "query": query,
+                    "dataset_ids": dataset_ids,
+                    "top_k": 10,
+                    "similarity_threshold": 0.0,
+                    "rerank_id": "BAAI/bge-reranker-v2-m3",
+                    "search_mode": "bm25"
+                }
+
+                print(f"📤 Input Arguments: {self.format_tool_arguments(arguments_rerank)}")
+
+                start_time = datetime.now()
+                response_rerank = await self.session.call_tool("bm25_search", arguments_rerank)
+                end_time = datetime.now()
+
+                print(f"⏱️  Execution time: {(end_time - start_time).total_seconds():.2f} seconds")
+                if hasattr(response_rerank, 'content') and response_rerank.content:
+                    for content in response_rerank.content:
+                        if hasattr(content, 'text') and content.text:
+                            self._print_text_as_pretty_json(content.text, label="bm25_search (with rerank)")
+                        else:
+                            print(content)
+
+        except KeyboardInterrupt:
+            print("\n↩️  Cancelled. Returning to menu.")
+            return
+        except Exception as e:
+            print(f"❌ Error calling bm25_search: {str(e)}")
+
 
 async def main():
     # Configuration
     # server_url = "https://wise-gibbon-delicate.ngrok-free.app/mcp/sse"
     server_url = "http://localhost:9383/sse"  # For local testing
-    
-    auth_token = "ragflow-Q2NmRkMzY4Nzc0MjExZjBhMWNhMDI0Mm"
+
+    auth_token = "ragflow-k3MGUzYmM4N2U1NDExZjA5YjBjMDVkNj"
     
     client = RAGFlowMCPClient(server_url, auth_token)
     client.print_banner()

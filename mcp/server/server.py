@@ -16,6 +16,7 @@
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import wraps
@@ -156,7 +157,7 @@ class RAGFlowConnector:
         raise Exception([types.TextContent(type="text", text=res.get("message", "Failed to read chunk"))])
 
     def retrieval(
-        self, dataset_ids, document_ids=None, question="", page=1, page_size=30, similarity_threshold=0.2, vector_similarity_weight=0.3, top_k=1024, rerank_id: str | None = None, keyword: bool = False
+        self, dataset_ids, document_ids=None, question="", page=1, page_size=30, similarity_threshold=0.2, vector_similarity_weight=0.3, top_k=1024, rerank_id: str | None = None, keyword: bool = False, search_mode: str | None = None
     ) -> dict:
         if document_ids is None:
             document_ids = []
@@ -172,6 +173,10 @@ class RAGFlowConnector:
             "dataset_ids": dataset_ids,
             "document_ids": document_ids,
         }
+        # Add search_mode to data_json for routing
+        if search_mode is not None:
+            data_json["search_mode"] = search_mode
+
         # Send a POST request to the backend service
         res = self._post("/retrieval", json=data_json)
         if not res:
@@ -364,6 +369,27 @@ async def list_tools(*, connector) -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="re_search",
+            description=(
+                "Regular expression (regex) search over all chunks in a dataset. "
+                "Does NOT use semantic retrieval; purely scans chunk text using regex patterns and returns the best matches. "
+                "Provide a dataset_id and regex pattern. Optionally limit by document_ids. Top_k is capped at 10.\n"
+                "Supports full regex syntax (e.g., 'video.*analytics', '\\bword\\b', 'pattern\\d+', etc.).\n\n"
+                "Available datasets (id, name, desc, counts):\n" + dataset_description
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_id": {"type": "string", "description": "Target dataset (knowledge base) ID"},
+                    "pattern": {"type": "string", "description": "Regular expression pattern to search for"},
+                    "document_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional: restrict search to specific document IDs"},
+                    "case_sensitive": {"type": "boolean", "description": "Case sensitive matching (default false)", "default": False},
+                    "top_k": {"type": "integer", "description": "Max number of chunks to return (<=10)", "default": 10}
+                },
+                "required": ["dataset_id", "pattern"],
+            },
+        ),
+        types.Tool(
             name="knowledge_base_retrieval",
             description="Retrieve relevant chunks from the RAGFlow retrieve interface based on the question. You can optionally specify dataset_ids to search only specific datasets, or omit dataset_ids entirely to search across ALL available datasets. You can also optionally specify document_ids to search within specific documents. When dataset_ids is not provided or is empty, the system will automatically search across all available datasets. Below is the list of all available datasets, including their descriptions and IDs:"
             + dataset_description,
@@ -467,6 +493,61 @@ async def list_tools(*, connector) -> list[types.Tool]:
                     }
                 },
                 "required": ["dataset_id"],
+            },
+        ),
+        types.Tool(
+            name="bm25_search",
+            description=(
+                "Pure BM25/full-text search using Elasticsearch's custom BM25 scoring. "
+                "Uses tokenized text matching without vector embeddings - faster than semantic search "
+                "and better for exact keyword/phrase matching. "
+                "Provide dataset_ids and a query. Optionally filter by document_ids.\n\n"
+                "Available datasets:\n" + dataset_description
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Dataset IDs to search (leave empty to search all)"
+                    },
+                    "document_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional: restrict to specific documents"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (will be tokenized)"
+                    },
+                    "keyword_extraction": {
+                        "type": "boolean",
+                        "description": "Use LLM to extract additional keywords (default: false)",
+                        "default": False
+                    },
+                    "rerank_id": {
+                        "type": "string",
+                        "description": "use rerank model 'BAAI/bge-reranker-v2-m3'"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Max results to return (default: 30)",
+                        "default": 30
+                    },
+                    "similarity_threshold": {
+                        "type": "number",
+                        "description": "Minimum score threshold 0-1 (default: 0.0)",
+                        "default": 0.0
+                    },
+                    "search_mode": {
+                        "type": "string",
+                        "description": "Search mode: 'bm25' for pure BM25 full-text, or null/omit for hybrid (default: null)",
+                        "enum": ["bm25", None],
+                        "default": None
+                    }
+                },
+                "required": ["query"]
             },
         ),
     ]
@@ -659,7 +740,12 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
 
             if not all_matches:
                 return [types.TextContent(type="text", text=json.dumps({
-                    "request": {"dataset_id": dataset_id, "document_ids": document_ids, "query": query, "mode": "fulltext-local"},
+                    "request": {
+                        "dataset_id": dataset_id,
+                        "document_ids": document_ids,
+                        "query": query,
+                        "mode": "fulltext-local"
+                    },
                     "response": "No results found.",
                     "chunks": [],
                     "documents": [],
@@ -729,7 +815,156 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
                 pass
             return [types.TextContent(type="text", text=f"Error during grep: {str(e)}")]
 
-    if name == "knowledge_base_retrieval":
+    elif name == "re_search":
+        """
+        Regular expression search tool - searches chunks using regex patterns.
+
+        Args:
+            dataset_id: Target dataset ID
+            pattern: Regex pattern to search for
+            document_ids: Optional list of document IDs to restrict search
+            case_sensitive: Whether to use case-sensitive matching (default False)
+            top_k: Maximum number of results to return (capped at 10)
+
+        Returns:
+            JSON response with matched chunks, sorted by match count and position
+        """
+        dataset_id = arguments.get("dataset_id")
+        pattern = arguments.get("pattern")
+        case_sensitive = bool(arguments.get("case_sensitive", False))
+        document_ids = arguments.get("document_ids", []) or []
+        if not dataset_id or not pattern:
+            return [types.TextContent(type="text", text="Error: dataset_id and pattern are required.")]
+
+        try:
+            # Compile regex pattern
+            try:
+                flags = 0 if case_sensitive else re.IGNORECASE
+                regex_pattern = re.compile(pattern, flags)
+            except re.error as e:
+                return [types.TextContent(type="text", text=f"Error: Invalid regex pattern: {str(e)}")]
+
+            # Gather chunks across dataset (optionally restricted to documents)
+            target_docs = set(document_ids) if document_ids else None
+            all_matches = []
+
+            for doc in connector.iter_documents(dataset_id):
+                doc_id = doc.get("id")
+                if target_docs and doc_id not in target_docs:
+                    continue
+                doc_name = doc.get("name") or doc.get("document_keyword") or "Unknown Document"
+                for chunk, doc_meta in connector.iter_chunks(dataset_id, doc_id):
+                    # Extract text
+                    text = chunk.get("content") or chunk.get("text") or ""
+                    if not isinstance(text, str):
+                        try:
+                            text = json.dumps(text, ensure_ascii=False)
+                        except Exception:
+                            text = str(text)
+
+                    # Match using regex
+                    matches = list(regex_pattern.finditer(text))
+                    count = len(matches)
+                    if count <= 0:
+                        continue
+
+                    first_match = matches[0]
+                    first_idx = first_match.start()
+                    match_len = first_match.end() - first_match.start()
+
+                    # Build a simple highlight snippet around first match
+                    start = max(0, first_idx - 80)
+                    end = min(len(text), first_idx + match_len + 120)
+                    snippet = ("..." if start > 0 else "") + text[start:end].strip() + ("..." if end < len(text) else "")
+
+                    out = {
+                        **chunk,
+                        "document_id": chunk.get("document_id") or chunk.get("doc_id") or doc_id,
+                        "kb_id": chunk.get("kb_id") or dataset_id,
+                        "document_keyword": doc_name,
+                        "doc_name": doc_name,
+                        "highlight": snippet,
+                        "_match_count": count,
+                        "_first_pos": first_idx,
+                    }
+                    all_matches.append(out)
+
+            if not all_matches:
+                return [types.TextContent(type="text", text=json.dumps({
+                    "request": {
+                        "dataset_id": dataset_id,
+                        "document_ids": document_ids,
+                        "pattern": pattern,
+                        "case_sensitive": case_sensitive,
+                        "mode": "regex"
+                    },
+                    "response": "No results found.",
+                    "chunks": [],
+                    "documents": [],
+                    "total": 0
+                }, ensure_ascii=False, indent=2))]
+
+            # Sort by match strength, then by earliest position, then shorter content
+            def sort_key(c):
+                content = c.get("content") or ""
+                clen = len(content) if isinstance(content, str) else 0
+                return (-int(c.get("_match_count", 0)), int(c.get("_first_pos", 0)), clen)
+
+            all_matches.sort(key=sort_key)
+
+            # Cap top_k to 10
+            try:
+                req_top_k = int(arguments.get("top_k", 10))
+            except Exception:
+                req_top_k = 10
+            top_k = max(1, min(10, req_top_k))
+
+            top_matches = all_matches[:top_k]
+
+            # Normalize similarity (0..1) based on match_count
+            max_count = max((m.get("_match_count", 0) for m in top_matches), default=1) or 1
+            for m in top_matches:
+                try:
+                    m["similarity"] = float(m.get("_match_count", 0)) / float(max_count)
+                except Exception:
+                    m["similarity"] = 0.0
+                # Remove internal keys
+                m.pop("_match_count", None)
+                m.pop("_first_pos", None)
+
+            formatted = format_retrieval_response(top_matches)
+            summary_text = ""
+            try:
+                if formatted and isinstance(formatted[0], types.TextContent):
+                    summary_text = formatted[0].text or ""
+            except Exception:
+                summary_text = ""
+
+            payload = {
+                "request": {
+                    "dataset_id": dataset_id,
+                    "document_ids": document_ids,
+                    "pattern": pattern,
+                    "case_sensitive": case_sensitive,
+                    "mode": "regex",
+                    "top_k": top_k,
+                },
+                "response": summary_text,
+                "chunks": top_matches,
+                "documents": [],
+                "total": len(all_matches),
+            }
+
+            return [types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        except Exception as e:
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
+            return [types.TextContent(type="text", text=f"Error during re_search: {str(e)}")]
+
+    elif name == "knowledge_base_retrieval":
         document_ids = arguments.get("document_ids", [])
         dataset_ids = arguments.get("dataset_ids", [])
         # Simplified output: always return a single JSON object
@@ -876,6 +1111,73 @@ async def call_tool(name: str, arguments: dict, *, connector) -> list[types.Text
             return format_documents_response(docs_data)
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error listing documents: {str(e)}")]
+
+    elif name == "bm25_search":
+        query = arguments.get("query")
+        if not query:
+            return [types.TextContent(type="text", text="Error: query is required.")]
+
+        dataset_ids = arguments.get("dataset_ids", [])
+        # If no dataset_ids provided, get all available datasets
+        if not dataset_ids:
+            dataset_list_str = connector.list_datasets()
+            if dataset_list_str:
+                for line in dataset_list_str.strip().split('\n'):
+                    if line.strip():
+                        try:
+                            dataset_info = json.loads(line.strip())
+                            dataset_ids.append(dataset_info["id"])
+                        except (json.JSONDecodeError, KeyError):
+                            continue
+
+        try:
+            data = connector.retrieval(
+                dataset_ids=dataset_ids,
+                document_ids=arguments.get("document_ids", []),
+                question=query,
+                page=1,
+                page_size=arguments.get("top_k", 60),
+                similarity_threshold=arguments.get("similarity_threshold", 0.0),
+                vector_similarity_weight=0.0,  # Pure BM25 - no vector search
+                top_k=1024,
+                keyword=arguments.get("keyword_extraction", False),
+                rerank_id=arguments.get("rerank_id", "BAAI/bge-reranker-v2-m3"),  # Add rerank always support
+                search_mode=arguments.get("search_mode", None)  # Route to pure BM25 if "bm25"
+            )
+
+            # Format response
+            chunks_list = data.get("chunks", [])
+            formatted = format_retrieval_response(chunks_list)
+            summary_text = ""
+            try:
+                if formatted and isinstance(formatted[0], types.TextContent):
+                    summary_text = formatted[0].text or ""
+            except Exception:
+                summary_text = ""
+
+            payload = {
+                "request": {
+                    "dataset_ids": dataset_ids,
+                    "document_ids": arguments.get("document_ids", []),
+                    "query": query,
+                    "mode": "bm25",
+                    "vector_similarity_weight": 0.0,
+                    "rerank_id": arguments.get("rerank_id"),
+                },
+                "response": summary_text,
+                "chunks": chunks_list,
+                "documents": data.get("doc_aggs", []),
+                "total": data.get("total", 0),
+            }
+
+            return [types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        except Exception as e:
+            try:
+                if getattr(e, "args", None) and isinstance(e.args[0], list):
+                    return e.args[0]
+            except Exception:
+                pass
+            return [types.TextContent(type="text", text=f"Error during BM25 search: {str(e)}")]
     
     raise ValueError(f"Tool not found: {name}")
 
