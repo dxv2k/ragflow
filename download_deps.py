@@ -44,6 +44,8 @@ repos = [
     "InfiniFlow/huqie",
     "BAAI/bge-large-zh-v1.5",
     "maidalun1020/bce-embedding-base_v1",
+    "BAAI/bge-reranker-v2-m3",  # Rerank model
+    "maidalun1020/bce-reranker-base_v1",  # Alternative rerank model
 ]
 
 def download_model(repo_id):

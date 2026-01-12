@@ -49,7 +49,7 @@ services:
       - ../history_data_agent:/ragflow/history_data_agent
       - ./service_conf.yaml.template:/ragflow/conf/service_conf.yaml.template
       - ./entrypoint.sh:/ragflow/entrypoint.sh
-      # MonkeyOCR specific volumes
+      - ragflow_models:/root/.ragflow
       - monkeyocr_models:/ragflow/monkeyocr/model_weight
       - monkeyocr_cache:/ragflow/monkeyocr/cache
       - ../mcp:/ragflow/mcp
@@ -90,8 +90,9 @@ services:
               capabilities: [gpu]
 
 
-# MonkeyOCR specific volumes
 volumes:
+  ragflow_models:
+    driver: local
   monkeyocr_models:
     driver: local
   monkeyocr_cache:
